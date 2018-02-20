@@ -14,6 +14,19 @@
 // // clean stuff up here
 // }
 
+class TestClock : public Clock {
+  unsigned long _millis = 100000;
+
+  public:
+  virtual unsigned long millis() {
+    return _millis;
+  }
+
+  void advanceSeconds(uint32_t s) {
+    _millis += 1000 * s;
+  }
+};
+
 class TestExecutor : public Executor {
   std::vector<ListenerFn> _expected;
   std::vector<ListenerFn> _called;
@@ -28,11 +41,12 @@ class TestExecutor : public Executor {
     va_end(args);
   }
 
-  virtual void exec(ListenerFn listener, AppState state, AppState oldState) {
+  virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
     _called.push_back(listener);
   }
 
   bool check() {
+    // TEST_ASSERT_EQUAL(_expected.size(), _called.size());
     return _expected == _called;
   }
 };
@@ -45,8 +59,8 @@ void test_gps_power_while_power(void) {
     TestExecutor expectedOps(NULL);
     state.setExecutor(&expectedOps);
 
-    TEST_ASSERT_EQUAL(state.getUsbPower(), false);
-    TEST_ASSERT_EQUAL(state.getGpsPower(), false);
+    TEST_ASSERT_EQUAL(false, state.getUsbPower());
+    TEST_ASSERT_EQUAL(false, state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -57,8 +71,8 @@ void test_gps_power_while_power(void) {
 
     state.setUsbPower(true);
 
-    TEST_ASSERT_EQUAL(state.getUsbPower(), true);
-    TEST_ASSERT_EQUAL(state.getGpsPower(), true);
+    TEST_ASSERT_EQUAL(true, state.getUsbPower());
+    TEST_ASSERT_EQUAL(true, state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -69,8 +83,8 @@ void test_gps_power_while_power(void) {
 
     state.setUsbPower(false);
 
-    TEST_ASSERT_EQUAL(state.getUsbPower(), false);
-    TEST_ASSERT_EQUAL(state.getGpsPower(), false);
+    TEST_ASSERT_EQUAL(false, state.getUsbPower());
+    TEST_ASSERT_EQUAL(false, state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -80,49 +94,40 @@ void test_join_once_when_low_power(void) {
   // When low power and not joined, attempt join once.
   // Don't repeatedly attempt join as time passes.
 
+  TestClock clock;
   TestExecutor expectedOps(onAttemptJoin, NULL);
-  AppState state(&expectedOps);
+  AppState state(&clock, &expectedOps);
   state.init();
 
-  TEST_ASSERT_EQUAL(state.getUsbPower(), false);
-  TEST_ASSERT_EQUAL(state.getJoined(), false);
-  TEST_ASSERT_EQUAL(state.getGpsPower(), false);
+  TEST_ASSERT_EQUAL(false, state.getUsbPower());
+  TEST_ASSERT_EQUAL(false, state.getJoined());
+  TEST_ASSERT_EQUAL(false, state.getGpsPower());
 
   TEST_ASSERT(expectedOps.check());
+
+  {
+    TestExecutor expectedOps(NULL);
+    state.setExecutor(&expectedOps);
+
+    for (uint32_t s = 1; s<60; s += 1) {
+      clock.advanceSeconds(1);
+      state.loop();
+      if (s==2) {
+        state.complete(&state.getModeAttemptJoin(), state.getModeAttemptJoin().getStartIndex());
+      }
+    }
+
+    TEST_ASSERT_EQUAL(false, state.getModeAttemptJoin().getActive());
+    TEST_ASSERT_EQUAL(false, state.getModeLowPowerJoin().getActive());
+
+    TEST_ASSERT(expectedOps.check());
+  }
 }
 
 void test_led_state_low(void) {
     digitalWrite(LED_BUILTIN, LOW);
     TEST_ASSERT_EQUAL(digitalRead(LED_BUILTIN), LOW);
 }
-
-// void setup() {
-//     // NOTE!!! Wait for >2 secs
-//     // if board doesn't support software reset via Serial.DTR/RTS
-//     delay(2000);
-
-//     UNITY_BEGIN();    // IMPORTANT LINE!
-//     RUN_TEST(test_gps_power_while_power);
-
-//     pinMode(LED_BUILTIN, OUTPUT);
-// }
-
-// uint8_t i = 0;
-// uint8_t max_blinks = 5;
-
-// void loop() {
-//     if (i < max_blinks)
-//     {
-//         RUN_TEST(test_join_once_when_low_power);
-//         delay(500);
-//         RUN_TEST(test_led_state_low);
-//         delay(500);
-//         i++;
-//     }
-//     else if (i == max_blinks) {
-//       UNITY_END(); // stop unit testing
-//     }
-// }
 
 int main(int argc, char **argv) {
     UNITY_BEGIN();

@@ -3,9 +3,10 @@
 
 #define GPS_POWER_PIN 50
 
+Clock gClock;
 Executor gExecutor;
 
-void Executor::exec(ListenerFn listener, AppState state, AppState oldState) {
+void Executor::exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *mode) {
   listener(state, oldState);
 }
 
