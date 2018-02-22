@@ -10,6 +10,8 @@ extern void changeGpsPower(const AppState &state, const AppState &oldState);
 extern void attemptJoin(const AppState &state, const AppState &oldState);
 extern void changeSleep(const AppState &state, const AppState &oldState);
 
+#define MINUTES_IN_MILLIS(x) ((x) * 60 * 1000)
+
 class Clock {
   public:
   virtual unsigned long millis() {
@@ -31,12 +33,13 @@ class Mode {
   uint32_t _startMillis;
   uint32_t _endMillis;
   uint8_t _repeatLimit;
+  uint32_t _maxDuration;
   uint8_t _invocationCount;
   Mode *_enclosing; // When this mode closes, enclosing one also becomes inactive. Should decouple with onDeactivate hook.
 
   public:
-  Mode(const char *name, uint8_t repeatLimit)
-  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(repeatLimit), _invocationCount(0), _enclosing(NULL)
+  Mode(const char *name, uint8_t repeatLimit, uint32_t maxDuration = 0)
+  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(repeatLimit), _maxDuration(maxDuration), _invocationCount(0), _enclosing(NULL)
   {
   }
 
@@ -56,7 +59,7 @@ class Mode {
     return _startIndex;
   }
 
-  bool getActive() const {
+  bool isActive() const {
     return _startIndex!=0;
   }
 
@@ -69,7 +72,7 @@ class Mode {
    * Activate if not already active and if invocationCount has not exceeded repeatLimit
    */
   bool activate(uint32_t currentIndex, uint32_t millis) {
-    if (getActive()) {
+    if (isActive()) {
       // Already active. Don't change anything.
       return false;
     }
@@ -85,7 +88,7 @@ class Mode {
   }
 
   bool setInactive(uint32_t invocationIndex, uint32_t millis) {
-    if (!getActive()) {
+    if (!isActive()) {
       // Already inactive. Don't change anything.
       // printf("Not active\n");
       return false;
@@ -104,8 +107,24 @@ class Mode {
     return true;
   }
 
+  bool terminate(uint32_t millis) {
+    setInactive(_startIndex, millis);
+  }
+
+  bool expired(uint32_t currentMillis) {
+    if (!isActive()) {
+      // Not active. Now way to expire.
+      return false;
+    }
+    if (_maxDuration==0) {
+      // No max.
+      return false;
+    }
+    return (_startMillis + _maxDuration) <= currentMillis;
+  }
+
   void dump() {
-    printf("Mode: \"%12s\" [%s]\n", _name, (getActive() ? "Active" : "Inactive"));
+    printf("Mode: \"%12s\" [%s]\n", _name, (isActive() ? "Active" : "Inactive"));
   }
 };
 
@@ -116,12 +135,13 @@ class AppState {
 
   // External state
   bool _usbPower;
+  bool _gpsFix;
 
   // Modes
   Mode _modeSleep;
   Mode _modeAttemptJoin;
   Mode _modeLowPowerJoin;
-  Mode _modeLowPowerGps;
+  Mode _modeLowPowerGpsSearch;
 
   // Dependent state - no setters
   bool _joined;
@@ -139,7 +159,7 @@ class AppState {
     _gpsPower(false), _joined(false),
     _modeAttemptJoin("AttemptJoin", 0),
     _modeLowPowerJoin("LowPowerJoin", 1),
-    _modeLowPowerGps("LowPowerGps", 1),
+    _modeLowPowerGpsSearch("LowPowerGpsSearch", 1, MINUTES_IN_MILLIS(5)),
     _modeSleep("Sleep", 0)
   {
   }
@@ -156,6 +176,8 @@ class AppState {
 
   void loop() {
     // Check for mode timeout.
+    onTime();
+
     // Process periodic triggers.
   }
 
@@ -180,6 +202,21 @@ class AppState {
     }
     AppState oldState(*this);
     _usbPower = value;
+    setDependent(oldState);
+    onChange(oldState);
+  }
+
+  bool getGpsFix() const {
+    return _gpsFix;
+  }
+
+  void setGpsFix(bool value) {
+    if (_gpsFix==value) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _gpsFix = value;
     setDependent(oldState);
     onChange(oldState);
   }
@@ -211,8 +248,8 @@ class AppState {
     return _modeAttemptJoin;
   }
 
-  Mode &getModeLowPowerGps() {
-    return _modeLowPowerGps;
+  Mode &getModeLowPowerGpsSearch() {
+    return _modeLowPowerGpsSearch;
   }
 
   Mode &getModeSleep() {
@@ -229,7 +266,7 @@ class AppState {
     _modeLowPowerJoin.dump();
     _modeSleep.dump();
     _modeAttemptJoin.dump();
-    _modeLowPowerGps.dump();
+    _modeLowPowerGpsSearch.dump();
   }
 
   private:
@@ -238,7 +275,7 @@ class AppState {
     uint32_t millis = _clock->millis();
 
     // _joined = false; // isSet(deviceAddr) && isSet(appSessionKey) && isSet(networkSessionKey)
-    _gpsPower = _usbPower || (!_usbPower && _joined);
+    _gpsPower = _usbPower || _modeLowPowerGpsSearch.isActive();
 
     // State based activation: Some world state exists, activate mode.
     if (!_usbPower && !_joined) {
@@ -246,7 +283,7 @@ class AppState {
     }
 
     // Containment activation: When LowPowerJoin becomes active, activate AttemptJoin.
-    if (_modeLowPowerJoin.getActive() && !oldState._modeLowPowerJoin.getActive()) {
+    if (_modeLowPowerJoin.isActive() && !oldState._modeLowPowerJoin.isActive()) {
       if (_modeAttemptJoin.activate(_changeCounter, millis)) {
         _modeAttemptJoin.setEnclosing(&_modeLowPowerJoin);
       }
@@ -254,26 +291,48 @@ class AppState {
 
     // Low power and joined, turn on GPS
     if (!_usbPower && _joined) {
-      _modeLowPowerGps.activate(_changeCounter, millis);
+      _modeLowPowerGpsSearch.activate(_changeCounter, millis);
+    }
+    // Terminating condition...
+    if (_modeLowPowerGpsSearch.isActive()) {
+      if (_gpsFix) {
+        _modeLowPowerGpsSearch.terminate(millis);
+      }
     }
 
     // Default activation: No other mode is active, activate default.
-    if (!_modeAttemptJoin.getActive() && !_modeLowPowerJoin.getActive() && !_modeLowPowerGps.getActive()) {
+    if (!_modeAttemptJoin.isActive() && !_modeLowPowerJoin.isActive() && !_modeLowPowerGpsSearch.isActive()) {
       _modeSleep.activate(_changeCounter, millis);
     }
     // _modeContinuousJoin.activate(_usbPower && !_joined);
     // dump();
   }
 
+  void onTime() {
+    bool changed = false;
+    uint32_t millis = _clock->millis();
+    AppState oldState(*this);
+    if (_modeLowPowerGpsSearch.isActive()) {
+      if (_modeLowPowerGpsSearch.expired(millis)) {
+        _modeLowPowerGpsSearch.terminate(millis);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setDependent(oldState);
+      onChange(oldState);
+    }
+  }
+
   void onChange(const AppState &oldState) {
     if (_gpsPower!=oldState._gpsPower) {
       _executor->exec(changeGpsPower, *this, oldState, NULL);
     }
-    if (_modeAttemptJoin.getActive() && !oldState._modeAttemptJoin.getActive()) {
+    if (_modeAttemptJoin.isActive() && !oldState._modeAttemptJoin.isActive()) {
       // Mode is active as long as attemptJoin is running.
       _executor->exec(attemptJoin, *this, oldState, &_modeAttemptJoin);
     }
-    if (_modeSleep.getActive() && !oldState._modeSleep.getActive()) {
+    if (_modeSleep.isActive() && !oldState._modeSleep.isActive()) {
       _executor->exec(changeSleep, *this, oldState, &_modeSleep);
     }
   }

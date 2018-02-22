@@ -119,8 +119,8 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
       }
     }
 
-    TEST_ASSERT_EQUAL(false, state.getModeAttemptJoin().getActive());
-    TEST_ASSERT_EQUAL(false, state.getModeLowPowerJoin().getActive());
+    TEST_ASSERT_EQUAL(false, state.getModeAttemptJoin().isActive());
+    TEST_ASSERT_EQUAL(false, state.getModeLowPowerJoin().isActive());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -146,8 +146,41 @@ void test_gps_power_after_low_power_successful_join(void) {
 
     TEST_ASSERT_EQUAL(true, state.getJoined());
     TEST_ASSERT_EQUAL(true, state.getGpsPower());
-    TEST_ASSERT_EQUAL(true, state.getModeLowPowerGps().getActive());
-    TEST_ASSERT_EQUAL(false, state.getModeSleep().getActive());
+    TEST_ASSERT_EQUAL(true, state.getModeLowPowerGpsSearch().isActive());
+    TEST_ASSERT_EQUAL(false, state.getModeSleep().isActive());
+
+    TEST_ASSERT(expectedOps.check());
+  }
+}
+
+void test_5m_limit_on_gps_search(void) {
+  TestClock clock;
+  TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
+  AppState state(&clock, &expectedOps);
+  state.init();
+
+  state.setJoined(true);
+  state.complete(&state.getModeAttemptJoin(), state.getModeAttemptJoin().getStartIndex());
+
+  TEST_ASSERT_EQUAL(false, state.getUsbPower());
+  TEST_ASSERT_EQUAL(true, state.getJoined());
+  TEST_ASSERT_EQUAL(true, state.getGpsPower());
+  TEST_ASSERT_EQUAL(true, state.getModeLowPowerGpsSearch().isActive());
+  TEST_ASSERT(expectedOps.check());
+
+  {
+    TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
+    state.setExecutor(&expectedOps);
+
+    clock.advanceSeconds(60);
+    state.loop();
+    TEST_ASSERT_EQUAL(true, state.getModeLowPowerGpsSearch().isActive());
+    TEST_ASSERT_EQUAL(false, state.getModeSleep().isActive());
+
+    clock.advanceSeconds(4 * 60);
+    state.loop();
+    TEST_ASSERT_EQUAL(false, state.getModeLowPowerGpsSearch().isActive());
+    TEST_ASSERT_EQUAL(true, state.getModeSleep().isActive());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -158,6 +191,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
     RUN_TEST(test_gps_power_after_low_power_successful_join);
+    RUN_TEST(test_5m_limit_on_gps_search);
     UNITY_END();
 
     return 0;
