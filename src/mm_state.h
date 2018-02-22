@@ -36,7 +36,7 @@ class Mode {
 
   public:
   Mode(const char *name, uint8_t repeatLimit)
-  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(repeatLimit), _invocationCount(0)
+  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(repeatLimit), _invocationCount(0), _enclosing(NULL)
   {
   }
 
@@ -121,6 +121,7 @@ class AppState {
   Mode _modeSleep;
   Mode _modeAttemptJoin;
   Mode _modeLowPowerJoin;
+  Mode _modeLowPowerGps;
 
   // Dependent state - no setters
   bool _joined;
@@ -138,6 +139,7 @@ class AppState {
     _gpsPower(false), _joined(false),
     _modeAttemptJoin("AttemptJoin", 0),
     _modeLowPowerJoin("LowPowerJoin", 1),
+    _modeLowPowerGps("LowPowerGps", 1),
     _modeSleep("Sleep", 0)
   {
   }
@@ -158,6 +160,7 @@ class AppState {
   }
 
   void complete(Mode *mode, uint32_t seqStamp) {
+    // printf("----------- completing: %p %p %d\n", mode, _clock, _clock->millis());
     AppState oldState(*this);
     if (mode->setInactive(seqStamp, _clock->millis())) {
       setDependent(oldState);
@@ -208,6 +211,14 @@ class AppState {
     return _modeAttemptJoin;
   }
 
+  Mode &getModeLowPowerGps() {
+    return _modeLowPowerGps;
+  }
+
+  Mode &getModeSleep() {
+    return _modeSleep;
+  }
+
   void dump() {
     printf("State:\n");
     printf("Millis: %d\n", _clock->millis());
@@ -218,6 +229,7 @@ class AppState {
     _modeLowPowerJoin.dump();
     _modeSleep.dump();
     _modeAttemptJoin.dump();
+    _modeLowPowerGps.dump();
   }
 
   private:
@@ -240,12 +252,17 @@ class AppState {
       }
     }
 
+    // Low power and joined, turn on GPS
+    if (!_usbPower && _joined) {
+      _modeLowPowerGps.activate(_changeCounter, millis);
+    }
+
     // Default activation: No other mode is active, activate default.
-    if (!_modeAttemptJoin.getActive() && !_modeLowPowerJoin.getActive()) {
+    if (!_modeAttemptJoin.getActive() && !_modeLowPowerJoin.getActive() && !_modeLowPowerGps.getActive()) {
       _modeSleep.activate(_changeCounter, millis);
     }
     // _modeContinuousJoin.activate(_usbPower && !_joined);
-    dump();
+    // dump();
   }
 
   void onChange(const AppState &oldState) {

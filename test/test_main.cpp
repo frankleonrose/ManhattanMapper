@@ -35,6 +35,7 @@ class TestExecutor : public Executor {
     va_list args;
     va_start(args, expected);
     while (expected!=NULL) {
+      // printf("Expect: %p\n", expected);
       _expected.push_back(expected);
       expected = va_arg(args, ListenerFn);
     }
@@ -42,6 +43,7 @@ class TestExecutor : public Executor {
   }
 
   virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
+    // printf("Exec: %p\n", listener);
     _called.push_back(listener);
   }
 
@@ -124,7 +126,7 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   }
 }
 
-void test_sleep_after_low_power_failed_join(void) {
+void test_gps_power_after_low_power_successful_join(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state(&clock, &expectedOps);
@@ -136,7 +138,7 @@ void test_sleep_after_low_power_failed_join(void) {
   TEST_ASSERT(expectedOps.check());
 
   {
-    TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
+    TestExecutor expectedOps(changeGpsPower, NULL);
     state.setExecutor(&expectedOps);
 
     state.setJoined(true);
@@ -144,6 +146,8 @@ void test_sleep_after_low_power_failed_join(void) {
 
     TEST_ASSERT_EQUAL(true, state.getJoined());
     TEST_ASSERT_EQUAL(true, state.getGpsPower());
+    TEST_ASSERT_EQUAL(true, state.getModeLowPowerGps().getActive());
+    TEST_ASSERT_EQUAL(false, state.getModeSleep().getActive());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -153,8 +157,7 @@ int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
-    RUN_TEST(test_sleep_after_low_power_failed_join);
-    // RUN_TEST(test_function_calculator_division);
+    RUN_TEST(test_gps_power_after_low_power_successful_join);
     UNITY_END();
 
     return 0;
