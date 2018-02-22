@@ -66,7 +66,7 @@ void test_gps_power_while_power(void) {
   }
 
   {
-    TestExecutor expectedOps(onChangeGpsPower, NULL);
+    TestExecutor expectedOps(changeGpsPower, NULL);
     state.setExecutor(&expectedOps);
 
     state.setUsbPower(true);
@@ -78,7 +78,7 @@ void test_gps_power_while_power(void) {
   }
 
   {
-    TestExecutor expectedOps(onChangeGpsPower, NULL);
+    TestExecutor expectedOps(changeGpsPower, NULL);
     state.setExecutor(&expectedOps);
 
     state.setUsbPower(false);
@@ -90,12 +90,12 @@ void test_gps_power_while_power(void) {
   }
 }
 
-void test_join_once_when_low_power(void) {
+void test_join_once_when_low_power_then_sleep_on_fail(void) {
   // When low power and not joined, attempt join once.
   // Don't repeatedly attempt join as time passes.
 
   TestClock clock;
-  TestExecutor expectedOps(onAttemptJoin, NULL);
+  TestExecutor expectedOps(attemptJoin, NULL);
   AppState state(&clock, &expectedOps);
   state.init();
 
@@ -106,7 +106,7 @@ void test_join_once_when_low_power(void) {
   TEST_ASSERT(expectedOps.check());
 
   {
-    TestExecutor expectedOps(NULL);
+    TestExecutor expectedOps(changeSleep, NULL); // Just goes to sleep, does not attempt multiple joins
     state.setExecutor(&expectedOps);
 
     for (uint32_t s = 1; s<60; s += 1) {
@@ -124,16 +124,36 @@ void test_join_once_when_low_power(void) {
   }
 }
 
-void test_led_state_low(void) {
-    digitalWrite(LED_BUILTIN, LOW);
-    TEST_ASSERT_EQUAL(digitalRead(LED_BUILTIN), LOW);
+void test_sleep_after_low_power_failed_join(void) {
+  TestClock clock;
+  TestExecutor expectedOps(attemptJoin, NULL);
+  AppState state(&clock, &expectedOps);
+  state.init();
+
+  TEST_ASSERT_EQUAL(false, state.getUsbPower());
+  TEST_ASSERT_EQUAL(false, state.getJoined());
+  TEST_ASSERT_EQUAL(false, state.getGpsPower());
+  TEST_ASSERT(expectedOps.check());
+
+  {
+    TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
+    state.setExecutor(&expectedOps);
+
+    state.setJoined(true);
+    state.complete(&state.getModeAttemptJoin(), state.getModeAttemptJoin().getStartIndex());
+
+    TEST_ASSERT_EQUAL(true, state.getJoined());
+    TEST_ASSERT_EQUAL(true, state.getGpsPower());
+
+    TEST_ASSERT(expectedOps.check());
+  }
 }
 
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_gps_power_while_power);
-    RUN_TEST(test_join_once_when_low_power);
-    RUN_TEST(test_led_state_low);
+    RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
+    RUN_TEST(test_sleep_after_low_power_failed_join);
     // RUN_TEST(test_function_calculator_division);
     UNITY_END();
 

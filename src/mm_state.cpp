@@ -10,11 +10,15 @@ void Executor::exec(ListenerFn listener, const AppState &state, const AppState &
   listener(state, oldState);
 }
 
-void onChangeGpsPower(const AppState &state, const AppState &oldState) {
+void changeGpsPower(const AppState &state, const AppState &oldState) {
   // Reify GpsPower value
   digitalWrite(GPS_POWER_PIN, state.getGpsPower());
 }
 
-void onAttemptJoin(const AppState &state, const AppState &oldState) {
+void attemptJoin(const AppState &state, const AppState &oldState) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
+}
+
+void changeSleep(const AppState &state, const AppState &oldState) {
+  // Enter or exit Sleep state
 }
