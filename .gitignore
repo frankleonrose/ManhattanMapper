@@ -6,3 +6,5 @@
 .vscode/c_cpp_properties.json
 lib/readme.txt
 .vscode/launch.json
+.vscode/*.db
+.vscode/.browse.c_cpp.db*

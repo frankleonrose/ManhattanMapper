@@ -42,6 +42,14 @@ class TestExecutor : public Executor {
     va_end(args);
   }
 
+  TestExecutor(ListenerFn expected, va_list &args) {
+    while (expected!=NULL) {
+      // printf("Expect: %p\n", expected);
+      _expected.push_back(expected);
+      expected = va_arg(args, ListenerFn);
+    }
+  }
+
   virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
     // printf("Exec: %p\n", listener);
     _called.push_back(listener);
@@ -186,12 +194,76 @@ void test_5m_limit_on_gps_search(void) {
   }
 }
 
+void startedSendAfter(const char *context, AppState &state, TestClock &clock, uint16_t seconds, ListenerFn expected, ...) {
+  // Starting fresh and we attempt a send.
+  va_list args;
+  va_start(args, expected);
+  TestExecutor expectedOps(expected, args);
+  va_end(args);
+  state.setExecutor(&expectedOps);
+
+  clock.advanceSeconds(seconds);
+  state.loop();
+
+  TEST_ASSERT_EQUAL_MESSAGE(true, state.getModePeriodicSend().isActive(), context);
+  TEST_ASSERT_EQUAL_MESSAGE(true, state.getModeSend().isActive(), context);
+  TEST_ASSERT_EQUAL_MESSAGE(false, state.getModeSleep().isActive(), context);
+
+  state.complete(state.getModeSend());
+  state.loop();
+
+  TEST_ASSERT_EQUAL_MESSAGE(true, state.getModePeriodicSend().isActive(), context);
+  TEST_ASSERT_EQUAL_MESSAGE(false, state.getModeSend().isActive(), context);
+  TEST_ASSERT_EQUAL_MESSAGE(false, state.getModeSleep().isActive(), context);
+
+  TEST_ASSERT(expectedOps.check());
+}
+
+void test_send_every_10_min(void) {
+  TestClock clock;
+  TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
+  AppState state(&clock, &expectedOps);
+  state.init();
+
+  // Setup our state...
+  state.setUsbPower(true);
+  state.setJoined(true);
+
+  TEST_ASSERT_EQUAL(true, state.getUsbPower());
+  TEST_ASSERT_EQUAL(true, state.getJoined());
+  TEST_ASSERT_EQUAL(true, state.getGpsPower());
+  TEST_ASSERT_EQUAL(false, state.getModeSleep().isActive());
+  TEST_ASSERT_EQUAL(false, state.getModeLowPowerJoin().isActive());
+  TEST_ASSERT(expectedOps.check());
+
+  startedSendAfter("[first pass]", state, clock, 1, sendLocation, NULL);
+
+  {
+    // Some time passes and we stay in same state and nothing happens.
+    TestExecutor expectedOps(NULL);
+    state.setExecutor(&expectedOps);
+
+    clock.advanceSeconds(5 * 60);
+    state.loop();
+
+    TEST_ASSERT_EQUAL(true, state.getModePeriodicSend().isActive());
+    TEST_ASSERT_EQUAL(false, state.getModeSend().isActive());
+    TEST_ASSERT_EQUAL(false, state.getModeSleep().isActive());
+
+    TEST_ASSERT(expectedOps.check());
+  }
+
+  // Full period passes and we start another send.
+  startedSendAfter("[second pass]", state, clock, 5 * 60, sendLocation, NULL);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
     RUN_TEST(test_gps_power_after_low_power_successful_join);
     RUN_TEST(test_5m_limit_on_gps_search);
+    RUN_TEST(test_send_every_10_min);
     UNITY_END();
 
     return 0;

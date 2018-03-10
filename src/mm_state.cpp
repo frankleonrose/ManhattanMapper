@@ -1,12 +1,11 @@
 #include <Arduino.h>
 #include "mm_state.h"
 
-#define GPS_POWER_PIN 50
-
 Clock gClock;
 Executor gExecutor;
 
 void Executor::exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *mode) {
+  // TODO Mode needs to be notified of completion, maybe?
   listener(state, oldState);
 }
 
@@ -21,4 +20,8 @@ void attemptJoin(const AppState &state, const AppState &oldState) {
 
 void changeSleep(const AppState &state, const AppState &oldState) {
   // Enter or exit Sleep state
+}
+
+void sendLocation(const AppState &state, const AppState &oldState) {
+  // Send location
 }
