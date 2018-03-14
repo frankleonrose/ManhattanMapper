@@ -1,12 +1,33 @@
+/*
+  Herein I attempt to imagine what the Helex-generated code might look like.
+
+  AppState - The entire application state.
+  Mutator - A mutation of the app state. (Right now just setABC() calls.)
+  OnTime - Tickle function that gets called as time passes. In the future
+          this should all be done with scheduling such that the system knows
+          exactly when next it cares to do something.
+  Mode - The basic organizational unit of Helex. The structure and attributes
+          of a particular Mode are stored in the Mode itself.
+          The runtime state of all Modes is stored within ModeState structs
+          that are contained within the AppState object. This breakdown
+          allows the entire application state to be copied simply with
+          memcpy. (Not that we do, but, for instance, the way Modes have
+          constant addresses that can be used to refer to them, as opposed
+          to being members of AppState.)
+ */
+
 #include <Arduino.h>
 #include <cstdio>
+#include <cassert>
 
+#define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
 #define GPS_POWER_PIN 50
 
 class AppState;
 class Mode;
 
 typedef void (*ListenerFn)(const AppState &state, const AppState &oldState);
+typedef bool (*StateModFn)(const AppState &state, const AppState &oldState);
 
 extern void changeGpsPower(const AppState &state, const AppState &oldState);
 extern void attemptJoin(const AppState &state, const AppState &oldState);
@@ -35,106 +56,124 @@ class Executor {
 };
 extern Executor gExecutor;
 
-class Mode {
+typedef struct ModeStateTag {
   // Mode is active as of a particular history index
+  uint32_t _startIndex = 0;
+  uint32_t _startMillis = 0;
+  uint32_t _endMillis = 0;
+  uint8_t _invocationCount = 0;
+
+  uint32_t _lastTriggerMillis = 0;
+
+  Mode *_enclosing = NULL; // When this mode closes, enclosing one also becomes inactive. Should decouple with onDeactivate hook.
+} ModeState;
+
+class Mode {
+  uint8_t _stateIndex;
+
   const char * const _name;
-  uint32_t _startIndex;
-  uint32_t _startMillis;
-  uint32_t _endMillis;
   const uint8_t _repeatLimit;
-  uint32_t _maxDuration;
-  uint8_t _invocationCount;
+  const uint32_t _maxDuration;
   const uint16_t _perTimes;
   const TimeUnit _perUnit;
-  uint32_t _lastTriggerMillis = 0;
-  Mode *_enclosing; // When this mode closes, enclosing one also becomes inactive. Should decouple with onDeactivate hook.
+
+  StateModFn _inspirationFn;
 
   public:
-  Mode(const char *name, uint8_t repeatLimit, uint32_t maxDuration = 0)
-  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(repeatLimit), _maxDuration(maxDuration), _invocationCount(0), _enclosing(NULL), _perTimes(0), _perUnit(TimeUnitNone)
-  {
-  }
+  Mode(const char *name, uint8_t repeatLimit, uint32_t maxDuration = 0);
 
   /** Construct periodic Mode. */
-  Mode(const char *name, uint16_t times, TimeUnit perUnit)
-  : _name(name), _startIndex(0), _startMillis(0), _repeatLimit(0), _maxDuration(0), _invocationCount(0), _enclosing(NULL), _perTimes(times), _perUnit(perUnit)
-  {}
+  Mode(const char *name, uint16_t times, TimeUnit perUnit);
 
-  void reset() {
+  void attach(AppState &state);
+
+  Mode &setInspiration(StateModFn fn) {
+    _inspirationFn = fn;
+    return *this;
+  }
+
+  ModeState &modeState(AppState &state);
+  const ModeState &modeState(const AppState &state) const;
+
+  void reset(AppState &state) {
     // Enable mode to be used again.
-    _invocationCount = 0;
+    modeState(state)._invocationCount = 0;
     // TODO: Also de-activate current operation?
     // _startIndex = 0;
     // _startMillis = 0;
   }
 
-  void setEnclosing(Mode *enclosing) {
-    _enclosing = enclosing;
+  void setEnclosing(AppState &state, Mode *enclosing) {
+    modeState(state)._enclosing = enclosing;
   }
 
-  const uint32_t getStartIndex() const {
-    return _startIndex;
+  const uint32_t getStartIndex(const AppState &state) const {
+    return modeState(state)._startIndex;
   }
 
-  bool isActive() const {
-    return _startIndex!=0;
+  bool isActive(const AppState &state) const {
+    return modeState(state)._startIndex!=0;
   }
 
-  bool getTerminated() const {
+  bool getTerminated(const AppState &state) const {
     // Cannot be used again.
-    return _repeatLimit!=0 && _repeatLimit==_invocationCount;
+    return _repeatLimit!=0 && _repeatLimit==modeState(state)._invocationCount;
   }
 
   /**
    * Activate if not already active and if invocationCount has not exceeded repeatLimit
    */
-  bool activate(uint32_t currentIndex, uint32_t millis, Mode *by) {
-    if (isActive()) {
+  bool activate(AppState &state, uint32_t currentIndex, uint32_t millis, Mode *by) {
+    if (isActive(state)) {
       // Already active. Don't change anything.
       return false;
     }
-    if (_repeatLimit!=0 && _invocationCount>=_repeatLimit) {
+    if (_repeatLimit!=0 && modeState(state)._invocationCount>=_repeatLimit) {
       // Hit repeat limit. Don't activate.
       // printf("Repeat limit\n");
       return false;
     }
-    _startIndex = currentIndex;
-    _startMillis = millis;
-    _invocationCount++;
-    setEnclosing(by);
+    modeState(state)._startIndex = currentIndex;
+    modeState(state)._startMillis = millis;
+    modeState(state)._invocationCount++;
+    setEnclosing(state, by);
+    if (by!=NULL) {
+      // by->childActive();
+    }
     return true;
   }
 
-  bool setInactive(uint32_t millis) {
-    if (!isActive()) {
+  bool setInactive(AppState &state, uint32_t millis) {
+    if (!isActive(state)) {
       // Already inactive. Don't change anything.
       // printf("Not active\n");
       return false;
     }
-    _startIndex = 0; // Inactive
-    _endMillis = millis;
+    modeState(state)._startIndex = 0; // Inactive
+    modeState(state)._endMillis = millis;
 
-    if (_enclosing!=NULL) {
-      _enclosing->setInactive(millis);
+    if (modeState(state)._enclosing!=NULL) {
+      // _enclosing->childInactive(millis);
+      modeState(state)._enclosing->setInactive(state, millis); // TODO: No, because it may have other children keeping it alive.
     }
     return true;
   }
 
-  bool setInactive(uint32_t invocationIndex, uint32_t millis) {
-    if (_startIndex!=invocationIndex) {
+  bool setInactive(AppState &state, uint32_t invocationIndex, uint32_t millis) {
+    if (modeState(state)._startIndex!=invocationIndex) {
       // Not talking about the same invocation.
       // printf("Different index: %u != %u\n", _startIndex, invocationIndex);
       return false;
     }
-    return setInactive(millis);
+    return setInactive(state, millis);
   }
 
-  bool terminate(uint32_t millis) {
-    return setInactive(_startIndex, millis);
+  bool terminate(AppState &state, uint32_t millis) {
+    return setInactive(state, modeState(state)._startIndex, millis);
   }
 
-  bool expired(uint32_t currentMillis) {
-    if (!isActive()) {
+  bool expired(AppState &state, uint32_t currentMillis) {
+    if (!isActive(state)) {
       // Not active. Now way to expire.
       return false;
     }
@@ -142,15 +181,15 @@ class Mode {
       // No max.
       return false;
     }
-    bool expired = (_startMillis + _maxDuration) <= currentMillis;
+    bool expired = (modeState(state)._startMillis + _maxDuration) <= currentMillis;
     if (expired) {
-      this->terminate(currentMillis);
+      this->terminate(state, currentMillis);
     }
     return expired;
   }
 
-  bool triggered(uint32_t currentMillis) {
-    if (!isActive()) {
+  bool triggered(AppState &state, uint32_t currentMillis) {
+    if (!isActive(state)) {
       // Not active. Now way to trigger.
       return false;
     }
@@ -170,17 +209,26 @@ class Mode {
         return false; // No period behavior
     }
     // printf("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
-    bool triggered = (_lastTriggerMillis==0) || (_lastTriggerMillis + period) <= currentMillis;
+    bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + period) <= currentMillis;
     if (triggered) {
-      _lastTriggerMillis = currentMillis;
+      modeState(state)._lastTriggerMillis = currentMillis;
     }
     return triggered;
   }
 
-  void dump() {
-    printf("Mode: \"%12s\" [%s] lastTrigger: %u\n", _name, (isActive() ? "Active" : "Inactive"), _lastTriggerMillis);
+  void dump(AppState &state) {
+    printf("Mode: \"%12s\" [%s] lastTrigger: %u\n", _name, (isActive(state) ? "Active" : "Inactive"), modeState(state)._lastTriggerMillis);
   }
 };
+
+// Modes
+extern Mode ModeMain;
+extern Mode ModeSleep;
+extern Mode ModeAttemptJoin;
+extern Mode ModeLowPowerJoin;
+extern Mode ModeLowPowerGpsSearch;
+extern Mode ModePeriodicSend;
+extern Mode ModeSend;
 
 class AppState {
   Clock *_clock;
@@ -191,18 +239,12 @@ class AppState {
   bool _usbPower;
   bool _gpsFix;
 
-  // Modes
-  Mode _modeMain;
-  Mode _modeSleep;
-  Mode _modeAttemptJoin;
-  Mode _modeLowPowerJoin;
-  Mode _modeLowPowerGpsSearch;
-  Mode _modePeriodicSend;
-  Mode _modeSend;
-
   // Dependent state - no setters
   bool _joined;
   bool _gpsPower;
+
+  uint8_t _modesCount = 0;
+  ModeState _modeStates[10];
 
   public:
   AppState() : AppState(&gClock, &gExecutor)
@@ -213,24 +255,25 @@ class AppState {
   : _changeCounter(0),
     _clock(clock), _executor(executor),
     _usbPower(false),
-    _gpsPower(false), _joined(false),
-    _modeAttemptJoin("AttemptJoin", 0),
-    _modeLowPowerJoin("LowPowerJoin", 1),
-    _modeLowPowerGpsSearch("LowPowerGpsSearch", 1, MINUTES_IN_MILLIS(5)),
-    _modeSleep("Sleep", 0),
-    _modePeriodicSend("PeriodicSend", 6, TimeUnitHour),
-    _modeSend("Send", 0),
-    _modeMain(NULL, 1)
+    _gpsPower(false), _joined(false)
   {
+    // ModeLowPowerJoin.setInspiration([] (AppState state, AppState oldState) { return true;})
   }
 
-  void init() {
-    // Main is always active
-    _modeMain.activate(_changeCounter, _clock->millis(), &_modeMain);
+  void init();
 
-    AppState reference; // Initial rev to compare to
-    setDependent(reference);
-    onChange(reference);
+  uint8_t allocateMode() {
+    uint8_t alloc = _modesCount++;
+    assert(alloc<ELEMENTS(_modeStates));
+    return alloc;
+  }
+
+  ModeState &modeState(const uint8_t stateIndex) {
+    return _modeStates[stateIndex];
+  }
+
+  const ModeState &modeState(const uint8_t stateIndex) const {
+    return _modeStates[stateIndex];
   }
 
   void setExecutor(Executor *executor) {
@@ -247,7 +290,7 @@ class AppState {
   void complete(Mode *mode, uint32_t seqStamp) {
     // printf("----------- completing: %p %p %d\n", mode, _clock, _clock->millis());
     AppState oldState(*this);
-    if (mode->setInactive(seqStamp, _clock->millis())) {
+    if (mode->setInactive(*this, seqStamp, _clock->millis())) {
       setDependent(oldState);
       onChange(oldState);
     }
@@ -256,7 +299,7 @@ class AppState {
   void complete(Mode &mode) {
     // printf("----------- completing: %p %p %d\n", mode, _clock, _clock->millis());
     AppState oldState(*this);
-    if (mode.setInactive(mode.getStartIndex(), _clock->millis())) {
+    if (mode.setInactive(*this, mode.getStartIndex(*this), _clock->millis())) {
       setDependent(oldState);
       onChange(oldState);
     }
@@ -313,27 +356,27 @@ class AppState {
   }
 
   Mode &getModeLowPowerJoin() {
-    return _modeLowPowerJoin;
+    return ModeLowPowerJoin;
   }
 
   Mode &getModeAttemptJoin() {
-    return _modeAttemptJoin;
+    return ModeAttemptJoin;
   }
 
   Mode &getModeLowPowerGpsSearch() {
-    return _modeLowPowerGpsSearch;
+    return ModeLowPowerGpsSearch;
   }
 
   Mode &getModeSleep() {
-    return _modeSleep;
+    return ModeSleep;
   }
 
   Mode &getModePeriodicSend() {
-    return _modePeriodicSend;
+    return ModePeriodicSend;
   }
 
   Mode &getModeSend() {
-    return _modeSend;
+    return ModeSend;
   }
 
   void dump() {
@@ -343,63 +386,67 @@ class AppState {
     printf("USB Power: %d\n", _usbPower);
     printf("Joined: %d\n", _joined);
     printf("GPS Power: %d\n", _gpsPower);
-    _modeLowPowerJoin.dump();
-    _modeSleep.dump();
-    _modeAttemptJoin.dump();
-    _modeLowPowerGpsSearch.dump();
-    _modePeriodicSend.dump();
-    _modeSend.dump();
+    ModeLowPowerJoin.dump(*this);
+    ModeSleep.dump(*this);
+    ModeAttemptJoin.dump(*this);
+    ModeLowPowerGpsSearch.dump(*this);
+    ModePeriodicSend.dump(*this);
+    ModeSend.dump(*this);
   }
 
   private:
   void setDependent(const AppState &oldState) {
+    #define FIRST_PASS (!ModeMain.isActive(oldState))
+    #define NEWLY_TRUE(_field) ((_field) && !(oldState._field))
+    #define NEWLY_FALSE(_field) (!(_field) && ((oldState._field) || FIRST_PASS))
+
     _changeCounter++;
     uint32_t millis = _clock->millis();
 
     // _joined = false; // isSet(deviceAddr) && isSet(appSessionKey) && isSet(networkSessionKey)
-    _gpsPower = _usbPower || _modeLowPowerGpsSearch.isActive();
+    _gpsPower = _usbPower || ModeLowPowerGpsSearch.isActive(*this);
 
     // State based activation: Some world state exists, activate mode.
     // LowPowerJoin required condition
-    if (!_usbPower && !_joined) {
-      _modeLowPowerJoin.activate(_changeCounter, millis, &_modeMain);
+    if (NEWLY_FALSE(_usbPower) && NEWLY_FALSE(_joined)) {
+      ModeLowPowerJoin.activate(*this, _changeCounter, millis, &ModeMain);
     }
     else {
-      _modeLowPowerJoin.terminate(millis);
+      ModeLowPowerJoin.terminate(*this, millis);
     }
 
     // PeriodicSend required condition
     if (_usbPower && _joined) {
-      _modePeriodicSend.activate(_changeCounter, millis, &_modeMain);
+      ModePeriodicSend.activate(*this, _changeCounter, millis, &ModeMain);
     }
     else {
-      _modePeriodicSend.terminate(millis);
+      ModePeriodicSend.terminate(*this, millis);
     }
 
     // Containment activation: When LowPowerJoin becomes active, activate AttemptJoin.
-    if (_modeLowPowerJoin.isActive() && !oldState._modeLowPowerJoin.isActive()) {
-      _modeAttemptJoin.activate(_changeCounter, millis, &_modeLowPowerJoin);
+    if (ModeLowPowerJoin.isActive(*this) && !ModeLowPowerJoin.isActive(oldState)) {
+      ModeAttemptJoin.activate(*this, _changeCounter, millis, &ModeLowPowerJoin);
     }
 
     // Low power and joined, turn on GPS
     if (!_usbPower && _joined) {
-      _modeLowPowerGpsSearch.activate(_changeCounter, millis, &_modeMain);
+      ModeLowPowerGpsSearch.activate(*this, _changeCounter, millis, &ModeMain);
     }
     else {
-      _modeLowPowerGpsSearch.terminate(millis);
+      ModeLowPowerGpsSearch.terminate(*this, millis);
     }
     // LowPowerGpsSearch terminating condition...
-    if (_modeLowPowerGpsSearch.isActive()) {
+    if (ModeLowPowerGpsSearch.isActive(*this)) {
       if (_gpsFix) {
-        _modeLowPowerGpsSearch.terminate(millis);
+        ModeLowPowerGpsSearch.terminate(*this, millis);
       }
     }
 
     // Default activation: No other mode is active, activate default.
-    if (!_modeAttemptJoin.isActive() && !_modeLowPowerJoin.isActive() && !_modeLowPowerGpsSearch.isActive()) {
-      _modeSleep.activate(_changeCounter, millis, &_modeMain);
+    if (!ModeAttemptJoin.isActive(*this) && !ModeLowPowerJoin.isActive(*this) && !ModeLowPowerGpsSearch.isActive(*this)) {
+      ModeSleep.activate(*this, _changeCounter, millis, &ModeMain);
     }
-    // _modeContinuousJoin.activate(_usbPower && !_joined);
+    // ModeContinuousJoin.activate(_usbPower && !_joined);
     // dump();
   }
 
@@ -407,12 +454,12 @@ class AppState {
     bool changed = false;
     uint32_t millis = _clock->millis();
     AppState oldState(*this);
-    if (_modeLowPowerGpsSearch.isActive()) {
-      changed |= _modeLowPowerGpsSearch.expired(millis);
+    if (ModeLowPowerGpsSearch.isActive(*this)) {
+      changed |= ModeLowPowerGpsSearch.expired(*this, millis);
     }
-    if (_modePeriodicSend.isActive()) {
-      if (_modePeriodicSend.triggered(millis)) {
-        _modeSend.activate(_changeCounter, millis, &_modePeriodicSend);
+    if (ModePeriodicSend.isActive(*this)) {
+      if (ModePeriodicSend.triggered(*this, millis)) {
+        ModeSend.activate(*this, _changeCounter, millis, &ModePeriodicSend);
         changed |= true;
       }
     }
@@ -426,15 +473,15 @@ class AppState {
     if (_gpsPower!=oldState._gpsPower) {
       _executor->exec(changeGpsPower, *this, oldState, NULL);
     }
-    if (_modeAttemptJoin.isActive() && !oldState._modeAttemptJoin.isActive()) {
+    if (ModeAttemptJoin.isActive(*this) && !ModeAttemptJoin.isActive(oldState)) {
       // Mode is active as long as attemptJoin is running.
-      _executor->exec(attemptJoin, *this, oldState, &_modeAttemptJoin);
+      _executor->exec(attemptJoin, *this, oldState, &ModeAttemptJoin);
     }
-    if (_modeSleep.isActive() && !oldState._modeSleep.isActive()) {
-      _executor->exec(changeSleep, *this, oldState, &_modeSleep);
+    if (ModeSleep.isActive(*this) && !ModeSleep.isActive(oldState)) {
+      _executor->exec(changeSleep, *this, oldState, &ModeSleep);
     }
-    if (_modeSend.isActive() && !oldState._modeSend.isActive()) {
-      _executor->exec(sendLocation, *this, oldState, &_modeSend);
+    if (ModeSend.isActive(*this) && !ModeSend.isActive(oldState)) {
+      _executor->exec(sendLocation, *this, oldState, &ModeSend);
     }
   }
 };
