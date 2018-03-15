@@ -13,6 +13,22 @@
  * - Adafruit SD Data Logger Featherwing
  * - Adafruit OLED Featherwing
  *
+ * Specification
+ * - Adjust send to request ACK once per day                                                TODO state.dateLastAck -> state.requestAck. Update date on send.
+ * - When powered, power on GPS                                                             [test_gps_power_while_power]
+ * - While powered and gpsfix, store location every 1 minutes
+ * - While powered and not joined, attempt join every 5 minutes
+ * - While powered and joined and gpsfix, send location every 10 minutes                    [test_send_every_10_min]
+ * - When powered and Δack-received-count and (frame counter > 10,000), attempt rejoin
+ * - When low power and nothing happening, sleep                                            [test_join_once_when_low_power_then_sleep_on_fail]
+ * - When low power and not joined, attempt join once                                       [test_join_once_when_low_power_then_sleep_on_fail]
+ * - When low power and joined, power on GPS                                                [test_gps_power_after_low_power_successful_join]
+ * - When low power and gpsfix, send once                                                   TODO LowPowerFix which terminates parent (LowPowerGpsSearch) on completion
+ * - When low power and gpsfix, store location once                                         TODO LowPowerFix terminates when BOTH send & store complete
+ * - When low power and joined and sent once, sleep
+ * - When low power and joined and waketime > 5m, sleep (still awake because no gpsfix)     [test_5m_limit_on_gps_search]
+ * - When low powered and Δack-received-count and (frame counter > 14,000), attempt rejoin
+ *
  *******************************************************************************/
 
 #include <SPI.h>
