@@ -17,6 +17,7 @@ Mode ModeMain(NULL, 1);
   Mode ModeLowPowerJoin("LowPowerJoin", 1);
   Mode ModeLowPowerGpsSearch("LowPowerGpsSearch", 1, MINUTES_IN_MILLIS(5), MINUTES_IN_MILLIS(5));
   Mode ModePeriodicSend("PeriodicSend", 6, TimeUnitHour);
+  Mode ModePeriodicJoin("PeriodicJoin", 12, TimeUnitHour);
 
 std::vector<Mode*> InvokeModes;
 int _force_initialization_ = []() -> int {
@@ -25,7 +26,9 @@ int _force_initialization_ = []() -> int {
   ModeMain.addChild(&ModeLowPowerJoin);
   ModeMain.addChild(&ModeLowPowerGpsSearch);
   ModeMain.addChild(&ModePeriodicSend);
+  ModeMain.addChild(&ModePeriodicJoin);
   ModeLowPowerJoin.addChild(&ModeAttemptJoin);
+  ModePeriodicJoin.addChild(&ModeAttemptJoin);
   ModePeriodicSend.addChild(&ModeSend);
 
   InvokeModes.push_back(&ModeSleep);
@@ -51,6 +54,10 @@ void AppState::init() {
   ModePeriodicSend.attach(*this);
   ModePeriodicSend.requiredFunction([](const AppState &state) -> bool {
     return state._usbPower && state._joined;
+  });
+  ModePeriodicJoin.attach(*this);
+  ModePeriodicJoin.requiredFunction([](const AppState &state) -> bool {
+    return state._usbPower && !state._joined;
   });
   ModeSend.attach(*this);
 

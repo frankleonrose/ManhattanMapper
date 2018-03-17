@@ -98,7 +98,7 @@ void test_gps_power_while_power(void) {
   }
 
   {
-    TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
+    TestExecutor expectedOps(changeGpsPower, NULL);
     state.setExecutor(&expectedOps);
 
     state.setUsbPower(true);
@@ -110,7 +110,7 @@ void test_gps_power_while_power(void) {
   }
 
   {
-    TestExecutor expectedOps(changeGpsPower, NULL);
+    TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
     state.setExecutor(&expectedOps);
 
     state.setUsbPower(false);
@@ -254,6 +254,7 @@ void test_send_every_10_min(void) {
   {
     StateTransaction t(state);
     state.setUsbPower(true);
+    state.complete(ModeAttemptJoin);
     state.setJoined(true);
   }
 

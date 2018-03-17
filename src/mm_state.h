@@ -250,6 +250,7 @@ extern Mode ModeSleep;
 extern Mode ModeAttemptJoin;
 extern Mode ModeLowPowerJoin;
 extern Mode ModeLowPowerGpsSearch;
+extern Mode ModePeriodicJoin;
 extern Mode ModePeriodicSend;
 extern Mode ModeSend;
 extern std::vector<Mode*> InvokeModes;
@@ -409,6 +410,7 @@ class AppState {
     printf("Joined [Input]: %d\n", _joined);
     printf("GPS Power [Output]: %d\n", _gpsPowerOut);
     ModeLowPowerJoin.dump(*this);
+    ModePeriodicJoin.dump(*this);
     ModeSleep.dump(*this);
     ModeAttemptJoin.dump(*this);
     ModeLowPowerGpsSearch.dump(*this);
