@@ -28,6 +28,18 @@ class TestClock : public Clock {
   }
 };
 
+#define FNAME(fn) {fn, #fn}
+static struct {
+  ListenerFn fn;
+  const char *name;
+} _names[] = {
+  FNAME(changeGpsPower),
+  FNAME(attemptJoin),
+  FNAME(changeSleep),
+  FNAME(sendLocation),
+  FNAME(sendLocationAck),
+};
+
 class TestExecutor : public Executor {
   std::vector<ListenerFn> _expected;
   std::vector<ListenerFn> _called;
@@ -36,7 +48,7 @@ class TestExecutor : public Executor {
     va_list args;
     va_start(args, expected);
     while (expected!=NULL) {
-      // printf("Expect: %p\n", expected);
+      printf("Expect: %p %s\n", expected, name(expected));
       _expected.push_back(expected);
       expected = va_arg(args, ListenerFn);
     }
@@ -45,20 +57,29 @@ class TestExecutor : public Executor {
 
   TestExecutor(ListenerFn expected, va_list &args) {
     while (expected!=NULL) {
-      // printf("Expect: %p\n", expected);
+      printf("Expect: %p %s\n", expected, name(expected));
       _expected.push_back(expected);
       expected = va_arg(args, ListenerFn);
     }
   }
 
   virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
-    // printf("Exec: %p\n", listener);
+    printf("Exec: %p %s\n", listener, name(listener));
     _called.push_back(listener);
   }
 
   bool check() {
     // TEST_ASSERT_EQUAL(_expected.size(), _called.size());
     return _expected == _called;
+  }
+
+  const char *name(ListenerFn fn) {
+    for (uint16_t i=0; i<ELEMENTS(_names); ++i) {
+      if (fn==_names[i].fn) {
+        return _names[i].name;
+      }
+    }
+    return "unknown";
   }
 };
 
