@@ -154,7 +154,17 @@ bool Mode::activate(AppState &state) {
 
 bool Mode::terminate(AppState &state) {
   // printf("Terminating: %s\n", name());
-  return setInactive(state, modeState(state)._startIndex, state.millis());
+  if (!isActive(state)) {
+    // Already inactive. Don't change anything.
+    // printf("Not active\n");
+    return false;
+  }
+  modeState(state)._startIndex = 0; // Inactive
+  modeState(state)._endMillis = state.millis();
+  if (modeState(state)._invocationActive) {
+    modeState(state)._invocationActive = false; // TODO: More active cancel? Probably.
+  }
+  return true;
 }
 
 bool Mode::propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState) {

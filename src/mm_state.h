@@ -188,26 +188,6 @@ class Mode {
    */
   bool activate(AppState &state);
 
-  bool setInactive(AppState &state, uint32_t millis) {
-    if (!isActive(state)) {
-      // Already inactive. Don't change anything.
-      // printf("Not active\n");
-      return false;
-    }
-    modeState(state)._startIndex = 0; // Inactive
-    modeState(state)._endMillis = millis;
-    return true;
-  }
-
-  bool setInactive(AppState &state, uint32_t invocationIndex, uint32_t millis) {
-    if (modeState(state)._startIndex!=invocationIndex) {
-      // Not talking about the same invocation.
-      // printf("Different index: %u != %u\n", _startIndex, invocationIndex);
-      return false;
-    }
-    return setInactive(state, millis);
-  }
-
   bool terminate(AppState &state);
 
   bool expired(AppState &state, uint32_t currentMillis) {
