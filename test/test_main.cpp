@@ -70,6 +70,17 @@ class TestExecutor : public Executor {
 
   bool check() {
     // TEST_ASSERT_EQUAL(_expected.size(), _called.size());
+    if (_expected != _called) {
+      printf("Checking expected: ");
+      for (auto pfn = _expected.begin(); pfn!=_expected.end(); ++pfn) {
+        printf("%s, ", name(*pfn));
+      }
+      printf("\n......vs executed: ");
+      for (auto pfn = _called.begin(); pfn!=_called.end(); ++pfn) {
+        printf("%s, ", name(*pfn));
+      }
+      printf("\n");
+    }
     return _expected == _called;
   }
 
@@ -232,9 +243,15 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
 
   TEST_ASSERT_EQUAL_MESSAGE(true, ModePeriodicSend.isActive(state), context);
   TEST_ASSERT_EQUAL_MESSAGE(true, ModeSend.isActive(state), context);
+  TEST_ASSERT_EQUAL_MESSAGE(true, ModeSendAck.isActive(state) ^ ModeSendNoAck.isActive(state), context);
   TEST_ASSERT_EQUAL_MESSAGE(false, ModeSleep.isActive(state), context);
 
-  state.complete(ModeSend);
+  if (ModeSendAck.isActive(state)) {
+    state.complete(ModeSendAck);
+  }
+  else {
+    state.complete(ModeSendNoAck);
+  }
   state.loop();
 
   TEST_ASSERT_EQUAL_MESSAGE(true, ModePeriodicSend.isActive(state), context);
@@ -246,7 +263,7 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
 
 void test_send_every_10_min(void) {
   TestClock clock;
-  TestExecutor expectedOps(attemptJoin, changeGpsPower, sendLocation, NULL);
+  TestExecutor expectedOps(attemptJoin, changeGpsPower, sendLocationAck, NULL);
   AppState state(&clock, &expectedOps);
   state.init();
 
@@ -273,7 +290,7 @@ void test_send_every_10_min(void) {
     TestExecutor expectedOps(NULL);
     state.setExecutor(&expectedOps);
 
-    clock.advanceSeconds(5 * 60);
+    clock.advanceSeconds(5 * 60); // 5 minutes here
     state.loop();
 
     TEST_ASSERT_EQUAL(true, ModePeriodicSend.isActive(state));
@@ -284,7 +301,7 @@ void test_send_every_10_min(void) {
   }
 
   // Full period passes and we start another send.
-  startedSendAfter("[second pass]", state, clock, 5 * 60, sendLocation, NULL);
+  startedSendAfter("[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, sendLocation, NULL);
 }
 
 int main(int argc, char **argv) {

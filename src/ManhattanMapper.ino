@@ -14,7 +14,7 @@
  * - Adafruit OLED Featherwing
  *
  * Specification
- * - Adjust send to request ACK once per day                                                TODO state.dateLastAck -> state.requestAck. Update date on send.
+ * - Adjust send to request ACK once per day                                                [test_send_every_10_min]
  * - When powered, power on GPS                                                             [test_gps_power_while_power]
  * - While powered and gpsfix, store location every 1 minutes
  * - While powered and not joined, attempt join every 5 minutes

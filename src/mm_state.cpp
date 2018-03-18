@@ -9,7 +9,9 @@ Executor gExecutor;
 
 // Shared
 Mode ModeAttemptJoin("AttemptJoin", attemptJoin);
-Mode ModeSend("Send", sendLocation);
+Mode ModeSend("Send", 1);
+Mode ModeSendNoAck("SendNoAck", sendLocation);
+Mode ModeSendAck("SendAck", sendLocationAck);
 
 // Main
 Mode ModeMain(NULL, 1);
@@ -30,10 +32,16 @@ int _force_initialization_ = []() -> int {
   ModeLowPowerJoin.addChild(&ModeAttemptJoin);
   ModePeriodicJoin.addChild(&ModeAttemptJoin);
   ModePeriodicSend.addChild(&ModeSend);
+  ModeSend.addChild(&ModeSendAck);
+  ModeSendAck.minGapDuration(DAYS_IN_MILLIS(1));
+  ModeSend.addChild(&ModeSendNoAck);
+  ModeSend.childActivationLimit(1);
+  ModeSend.childSimultaneousLimit(1);
 
   InvokeModes.push_back(&ModeSleep);
   InvokeModes.push_back(&ModeAttemptJoin);
-  InvokeModes.push_back(&ModeSend);
+  InvokeModes.push_back(&ModeSendAck);
+  InvokeModes.push_back(&ModeSendNoAck);
 
   return 0;
 }();
@@ -114,6 +122,18 @@ const ModeState &Mode::modeState(const AppState &state) const {
   return state.modeState(_stateIndex);
 }
 
+bool Mode::insufficientGap(const AppState &state) const {
+  if (_minGapDuration==0) {
+    // We don't have this limit. Never insufficient.
+    return false;
+  }
+  if (modeState(state)._endMillis==0) {
+    // Never been run. We have no idea of gap, so no, not insufficient.
+    return false;
+  }
+  return (state.millis() - modeState(state)._endMillis) < _minGapDuration;
+}
+
 bool Mode::expired(const AppState &state) const {
   if (!isActive(state)) {
     // Not active. Now way to expire.
@@ -158,11 +178,11 @@ bool Mode::persistent(const AppState &state) const {
     // We started an external function and we stick around until it is done.
     persist |= modeState(state)._invocationActive;
   }
-  else if (_minDuration!=0) {
+  if (_minDuration!=0) {
     // Once inspired we stay alive until we have lived minDuration.
     persist |= (modeState(state)._startMillis + _minDuration) > state.millis(); // Soonest expiration time is later than now
   }
-  else if (_perUnit!=TimeUnitNone) {
+  if (_perUnit!=TimeUnitNone) {
     // As long as one child has supply to be inspired, we persist.
     // printf("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
@@ -203,9 +223,15 @@ bool Mode::activate(AppState &state) {
     // printf("Repeat limit\n");
     return false;
   }
+  if (insufficientGap(state)) {
+    // Not enough time has passed since last invocation
+    printf("Insufficient gap delay\n");
+    return false;
+  }
   modeState(state)._startIndex = state.changeCounter();
   modeState(state)._startMillis = state.millis();
   modeState(state)._invocationCount++;
+  modeState(state)._childInspirationCount = 0;
   if (_invokeFunction!=NULL) {
     modeState(state)._invocationActive = true;
   }
@@ -237,7 +263,9 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   // printf("Propagating: %s with parent %u\n", name(), parentActivation);
   // dump(state);
 
-  if (expired(state) || (isActive(state) && !requiredState(state))) {
+  if (expired(state)
+      || (_invokeFunction!=NULL && !modeState(state)._invocationActive && modeState(oldState)._invocationActive)
+      || (isActive(state) && !requiredState(state))) {
     // Activate and unable to be.
     terminate(state);
   }
@@ -255,6 +283,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
     // Active but parent not supportive. Record that parent not supportive.
     if (state.changeCounter()!=_supportiveFrame) {
       _supportiveParents = _countParents;
+      _supportiveFrame = state.changeCounter();
     }
     --_supportiveParents;
     if (_supportiveParents==0) {
@@ -268,20 +297,64 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   bool barren = true;
   ActivationType myActivation = activation(state, oldState);
   bool imActive = isActive(state);
-  for (auto m = _children.begin(); m!=_children.end(); ++m) {
-    auto mode = *m;
-    if (_defaultMode!=mode || !imActive || myActivation==ActivationSustaining) {
-      barren &= !mode->propagate(myActivation, state, oldState);
+
+  int limit = INT_MAX;
+  int remaining = INT_MAX;
+  if (imActive) {
+    // Figure out how many children may be inspired
+    if (_childSimultaneousLimit!=0) {
+      limit = _childSimultaneousLimit;
+      for (auto m = _children.begin(); m!=_children.end(); ++m) {
+        if ((*m)->isActive(state)) {
+          --limit;
+        }
+      }
+    }
+    if (_childActivationLimit!=0) {
+      remaining = (int)_childActivationLimit - (int)modeState(state)._childInspirationCount;
+      limit = std::min(limit, remaining);
+    }
+    if (limit==0) {
+      myActivation = ActivationSustaining;
     }
   }
 
-  if (imActive && myActivation!=ActivationSustaining) {
+  for (auto m = _children.begin(); m!=_children.end(); ++m) {
+    auto mode = *m;
+    if (_defaultMode!=mode || !imActive || myActivation==ActivationSustaining) {
+      bool oldActive = mode->isActive(state);
+      bool active = mode->propagate(myActivation, state, oldState);
+      barren &= !active;
+
+      if (!oldActive && active) {
+        // Inspired the child.
+        ++modeState(state)._childInspirationCount;
+        --remaining;
+        --limit;
+        if (limit==0) {
+          // We've reached the limit of our inspiration. Proceed with just sustaining power.
+          myActivation = ActivationSustaining;
+        }
+      }
+    }
+  }
+
+  if (imActive && !_children.empty() && remaining==0 && barren && !persistent(state)) {
+    printf("Terminating for barren and no capacity to inspire children: %s\n", name());
+    terminate(state);
+  }
+  else if (imActive && myActivation!=ActivationSustaining) {
     // We don't care about children if we're not active - they all get shut down
     if (_defaultMode!=NULL) {
       // We have default cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
-        // printf("Activating default: %s\n", _defaultMode->name());
-        _defaultMode->propagate(ActivationDefaultCell, state, oldState);
+        if (limit>0) {
+          printf("Activating default: %s\n", _defaultMode->name());
+          bool active = _defaultMode->propagate(ActivationDefaultCell, state, oldState);
+          if (active) {
+            ++modeState(state)._childInspirationCount;
+          }
+        }
       }
       else {
         // printf("Terminating default: %s\n", _defaultMode->name());

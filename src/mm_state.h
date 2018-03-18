@@ -35,8 +35,11 @@ extern void changeGpsPower(const AppState &state, const AppState &oldState);
 extern void attemptJoin(const AppState &state, const AppState &oldState);
 extern void changeSleep(const AppState &state, const AppState &oldState);
 extern void sendLocation(const AppState &state, const AppState &oldState);
+extern void sendLocationAck(const AppState &state, const AppState &oldState);
 
 #define MINUTES_IN_MILLIS(x) ((x) * 60 * 1000)
+#define HOURS_IN_MILLIS(x) ((x) * 60 * MINUTES_IN_MILLIS(1))
+#define DAYS_IN_MILLIS(x) ((x) * 24 * HOURS_IN_MILLIS(1))
 
 typedef enum TimeUnit {
   TimeUnitNone,
@@ -77,6 +80,8 @@ typedef struct ModeStateTag {
   uint8_t _invocationCount = 0;
 
   uint32_t _lastTriggerMillis = 0;
+
+  uint8_t _childInspirationCount = 0;
 } ModeState;
 
 #define STATE_INDEX_INITIAL 255
@@ -86,13 +91,18 @@ class Mode {
 
   const char * const _name;
   const uint8_t _repeatLimit = 0;
+
   const uint32_t _minDuration = 0;
   const uint32_t _maxDuration = 0;
+  uint32_t _minGapDuration = 0;
+
   const uint16_t _perTimes = 0;
   const TimeUnit _perUnit = TimeUnitNone;
 
   Mode *_defaultMode = NULL;
   std::vector<Mode*> _children;
+  uint8_t _childActivationLimit = 0;
+  uint8_t _childSimultaneousLimit = 0;
 
   StateModFn _inspirationFn;
   ListenerFn _invokeFunction;
@@ -108,13 +118,12 @@ class Mode {
   /** Construct periodic Mode. */
   Mode(const char *name, uint16_t times, TimeUnit perUnit);
 
+  /** Construct invoker Mode. */
   Mode(const char *name, ListenerFn invokeFunction)
   : _name(name),
     _invokeFunction(invokeFunction)
   {
   }
-
-  /** Construct invoker Mode. */
 
   void attach(AppState &state);
   void detach(AppState &state);
@@ -153,6 +162,10 @@ class Mode {
 
   ActivationType activation(const AppState &state, const AppState &oldState) const;
 
+  Mode &minGapDuration(uint32_t gap) {
+    _minGapDuration = gap;
+    return *this;
+  }
   Mode &defaultMode(Mode *mode) {
     _defaultMode = mode;
     return *this;
@@ -161,6 +174,16 @@ class Mode {
   Mode &addChild(Mode *child) {
     _children.push_back(child);
     ++child->_countParents;
+    return *this;
+  }
+
+  Mode &childActivationLimit(uint8_t limit) {
+    _childActivationLimit = limit;
+    return *this;
+  }
+
+  Mode &childSimultaneousLimit(uint8_t limit) {
+    _childSimultaneousLimit = limit;
     return *this;
   }
 
@@ -183,6 +206,8 @@ class Mode {
     return _repeatLimit!=0 && _repeatLimit<=modeState(state)._invocationCount;
   }
 
+  bool insufficientGap(const AppState &state) const;
+
   /**
    * Activate if not already active and if invocationCount has not exceeded repeatLimit
    */
@@ -195,9 +220,11 @@ class Mode {
   bool triggered(const AppState &state) const;
 
   void dump(const AppState &state) const {
-    printf("Mode: \"%12s\" [%8s][%7s]", _name,
+    printf("Mode: \"%20s\" [%8s][%7s]", _name,
       (isActive(state) ? "Active" : "Inactive"),
       (requiredState(state) ? "Ready" : "Unready"));
+    if (_childSimultaneousLimit!=0) printf(" childSimultaneous: %d", (int)_childSimultaneousLimit);
+    if (_children.size()>0) printf(" childInspirations: %d [%d]", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
     if (_perUnit != TimeUnitNone) printf(" lastTrigger: %u", modeState(state)._lastTriggerMillis);
     if (_invokeFunction!=NULL) printf(" [%11s]", modeState(state)._invocationActive ? "Running" : "Not running");
     printf("\n");
@@ -213,6 +240,8 @@ extern Mode ModeLowPowerGpsSearch;
 extern Mode ModePeriodicJoin;
 extern Mode ModePeriodicSend;
 extern Mode ModeSend;
+extern Mode ModeSendNoAck;
+extern Mode ModeSendAck;
 extern std::vector<Mode*> InvokeModes;
 
 class AppState {
@@ -286,9 +315,10 @@ class AppState {
     if (!mode.modeState(*this)._invocationActive) {
       return;
     }
+    AppState oldState(*this);
+
     mode.modeState(*this)._invocationActive = false;
 
-    AppState oldState(*this);
     setDependent(oldState);
   }
 
@@ -297,9 +327,10 @@ class AppState {
     if (!mode.modeState(*this)._invocationActive) {
       return;
     }
+    AppState oldState(*this);
+
     mode.modeState(*this)._invocationActive = false;
 
-    AppState oldState(*this);
     setDependent(oldState);
   }
 
@@ -363,19 +394,22 @@ class AppState {
   }
 
   void dump() const {
-    printf("State:\n");
-    printf("Millis: %lu\n", _clock->millis());
-    printf("Counter: %u\n", _changeCounter);
-    printf("USB Power [Input]: %d\n", _usbPower);
-    printf("Joined [Input]: %d\n", _joined);
-    printf("GPS Power [Output]: %d\n", _gpsPowerOut);
+    printf("AppState:\n");
+    printf("- Millis:             %lu\n", _clock->millis());
+    printf("- Counter:            %u\n", _changeCounter);
+    printf("- USB Power [Input]:  %d\n", _usbPower);
+    printf("- Joined [Input]:     %d\n", _joined);
+    printf("- GPS Power [Output]: %d\n", _gpsPowerOut);
+    ModeMain.dump(*this);
+    ModeSleep.dump(*this);
     ModeLowPowerJoin.dump(*this);
     ModePeriodicJoin.dump(*this);
-    ModeSleep.dump(*this);
     ModeAttemptJoin.dump(*this);
     ModeLowPowerGpsSearch.dump(*this);
     ModePeriodicSend.dump(*this);
     ModeSend.dump(*this);
+    ModeSendNoAck.dump(*this);
+    ModeSendAck.dump(*this);
   }
 
   private:
@@ -422,6 +456,7 @@ class AppState {
     for (auto m = InvokeModes.begin(); m!=InvokeModes.end(); ++m) {
       auto mode = *m;
       if (mode->isActive(*this) && !mode->isActive(oldState)) {
+        // printf("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), *this, oldState, mode);
       }
     }
