@@ -260,6 +260,9 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
     if (_supportiveParents==0) {
       terminate(state);
     }
+    else {
+      return false; // Parent is dead/dying, so it won't be doing any barren logic.
+    }
   }
 
   bool barren = true;
