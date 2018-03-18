@@ -39,27 +39,22 @@ int _force_initialization_ = []() -> int {
 }();
 
 void AppState::init() {
+  ModeMain.detach(*this);
   ModeMain.attach(*this);
-  ModeAttemptJoin.attach(*this);
-  ModeLowPowerJoin.attach(*this);
+
   ModeLowPowerJoin.requiredFunction([](const AppState &state) -> bool {
     return !state._usbPower && !state._joined;
   });
-  ModeLowPowerGpsSearch.attach(*this);
   ModeLowPowerGpsSearch.requiredFunction([](const AppState &state) -> bool {
     return !state._usbPower && state._joined && !state._gpsFix;
   });
 
-  ModeSleep.attach(*this);
-  ModePeriodicSend.attach(*this);
   ModePeriodicSend.requiredFunction([](const AppState &state) -> bool {
     return state._usbPower && state._joined;
   });
-  ModePeriodicJoin.attach(*this);
   ModePeriodicJoin.requiredFunction([](const AppState &state) -> bool {
     return state._usbPower && !state._joined;
   });
-  ModeSend.attach(*this);
 
   // Main is always active
   ModeMain.activate(*this);
@@ -86,13 +81,29 @@ Mode::Mode(const char *name, uint16_t times, TimeUnit perUnit)
 }
 
 void Mode::attach(AppState &state) {
+  if (_stateIndex!=STATE_INDEX_INITIAL) {
+    return;
+  }
   _stateIndex = state.allocateMode();
+
+  _supportiveFrame = 0;
 
   ModeState &ms = state.modeState(_stateIndex);
   ms._startIndex = 0;
   ms._startMillis = 0;
   ms._invocationCount = 0;
-  // ms._enclosing = NULL;
+
+  for (auto m = _children.begin(); m!=_children.end(); ++m) {
+    (*m)->attach(state);
+  }
+}
+
+void Mode::detach(AppState &state) {
+  _stateIndex = STATE_INDEX_INITIAL;
+
+  for (auto m = _children.begin(); m!=_children.end(); ++m) {
+    (*m)->detach(state);
+  }
 }
 
 ModeState &Mode::modeState(AppState &state) {

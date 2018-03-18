@@ -78,8 +78,10 @@ typedef struct ModeStateTag {
   uint32_t _lastTriggerMillis = 0;
 } ModeState;
 
+#define STATE_INDEX_INITIAL 255
+
 class Mode {
-  uint8_t _stateIndex;
+  uint8_t _stateIndex = STATE_INDEX_INITIAL;
 
   const char * const _name;
   const uint8_t _repeatLimit = 0;
@@ -95,9 +97,9 @@ class Mode {
   ListenerFn _invokeFunction;
   StatePredicate _requiredFunction;
 
-  uint8_t _countParents;
-  uint8_t _supportiveParents;
-  uint32_t _supportiveFrame; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
+  uint8_t _countParents = 0;
+  uint8_t _supportiveParents = 0;
+  uint32_t _supportiveFrame = 0; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
 
   public:
   Mode(const char *name, uint8_t repeatLimit, uint32_t minDuration = 0, uint32_t maxDuration = 0);
@@ -114,6 +116,7 @@ class Mode {
   /** Construct invoker Mode. */
 
   void attach(AppState &state);
+  void detach(AppState &state);
 
   bool requiredState(const AppState &state) const {
     if (_requiredFunction==NULL) {
