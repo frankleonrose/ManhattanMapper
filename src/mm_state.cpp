@@ -114,6 +114,44 @@ const ModeState &Mode::modeState(const AppState &state) const {
   return state.modeState(_stateIndex);
 }
 
+bool Mode::expired(const AppState &state) const {
+  if (!isActive(state)) {
+    // Not active. Now way to expire.
+    return false;
+  }
+  if (_maxDuration==0) {
+    // No max.
+    return false;
+  }
+  bool expired = (modeState(state)._startMillis + _maxDuration) <= state.millis();
+  return expired;
+}
+
+bool Mode::triggered(const AppState &state) const {
+  if (!isActive(state)) {
+    // Not active. Now way to trigger.
+    return false;
+  }
+  if (_perUnit==TimeUnitNone) {
+    // No period.
+    return false;
+  }
+  uint32_t period = 0;
+  switch (_perUnit) {
+    case TimeUnitDay:
+      period = 24 * 60 * 60 * 1000 / _perTimes;
+      break;
+    case TimeUnitHour:
+      period = 60 * 60 * 1000 / _perTimes;
+      break;
+    case TimeUnitNone:
+      return false; // No period behavior
+  }
+  // printf("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
+  bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + period) <= state.millis();
+  return triggered;
+}
+
 bool Mode::persistent(const AppState &state) const {
   bool persist = false;
   if (_invokeFunction!=NULL) {
@@ -129,8 +167,8 @@ bool Mode::persistent(const AppState &state) const {
     // printf("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       Mode *mode = *m;
-      // printf(" %s invocations=%u limit=%u\n", mode->name(), mode->modeState(state)._invocationCount,mode->_repeatLimit);
-      persist |= (mode->_repeatLimit==0) || (mode->modeState(state)._invocationCount < mode->_repeatLimit);
+      // printf(" %s invocations=%u limit=%u\n", mode->name(), mode->modeState(state)._invocationCount, mode->_repeatLimit);
+      persist |= !hitRepeatLimit(state);
     }
     // printf("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
   }
@@ -141,7 +179,12 @@ ActivationType Mode::activation(const AppState &state, const AppState &oldState)
   bool now = isActive(state);
   bool old = isActive(oldState);
   if (now) {
-    return old ? ActivationActive : ActivationInspiring;
+    if (persistent(state)) {
+      return triggered(state) ?  ActivationInspiring : ActivationSustaining;
+    }
+    else {
+      return old ? ActivationActive : ActivationInspiring;
+    }
   }
   else {
     return old ? ActivationExpiring : ActivationInactive;
@@ -155,7 +198,7 @@ bool Mode::activate(AppState &state) {
     // printf("Already active\n");
     return false;
   }
-  if (_repeatLimit!=0 && modeState(state)._invocationCount>=_repeatLimit) {
+  if (hitRepeatLimit(state)) {
     // Hit repeat limit. Don't activate.
     // printf("Repeat limit\n");
     return false;
@@ -194,7 +237,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   // printf("Propagating: %s with parent %u\n", name(), parentActivation);
   // dump(state);
 
-  if (isActive(state) && !requiredState(state)) {
+  if (expired(state) || (isActive(state) && !requiredState(state))) {
     // Activate and unable to be.
     terminate(state);
   }
@@ -224,12 +267,12 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   bool imActive = isActive(state);
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
     auto mode = *m;
-    if (_defaultMode!=mode || !imActive) {
+    if (_defaultMode!=mode || !imActive || myActivation==ActivationSustaining) {
       barren &= !mode->propagate(myActivation, state, oldState);
     }
   }
 
-  if (imActive) {
+  if (imActive && myActivation!=ActivationSustaining) {
     // We don't care about children if we're not active - they all get shut down
     if (_defaultMode!=NULL) {
       // We have default cell. Actively inspire it if barren or kill it if not barren.
@@ -244,13 +287,17 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
     }
     else { // No default Mode
       if (barren) {
-        // Barren cells lose activation, unless we are explicitly kept active as defaultCell
+        // Barren cells lose activation, unless we are explicitly kept active as defaultCell or persistent(because periodic)
         if (parentActivation!=ActivationDefaultCell && !persistent(state)) {
           // printf("Terminating for barrenness: %s\n", name());
           terminate(state);
         }
       }
     }
+  }
+
+  if (triggered(state)) {
+    modeState(state)._lastTriggerMillis = state.millis();
   }
 
   return isActive(state);

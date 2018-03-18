@@ -47,9 +47,10 @@ typedef enum TimeUnit {
 typedef enum ActivationTag {
   ActivationInspiring,
   ActivationActive,
+  ActivationSustaining, // Used by Periodic cells that aren't inspiring but neither are they removing support
   ActivationExpiring,
   ActivationInactive,
-  ActivationDefaultCell
+  ActivationDefaultCell // Used to tell a child it is being activated as a default cell
 } ActivationType;
 
 class Clock {
@@ -173,17 +174,13 @@ class Mode {
     modeState(state)._invocationCount = 0;
   }
 
-  const uint32_t getStartIndex(const AppState &state) const {
-    return modeState(state)._startIndex;
-  }
-
   bool isActive(const AppState &state) const {
     return modeState(state)._startIndex!=0;
   }
 
-  bool getTerminated(const AppState &state) const {
+  bool hitRepeatLimit(const AppState &state) const {
     // Cannot be used again.
-    return _repeatLimit!=0 && _repeatLimit==modeState(state)._invocationCount;
+    return _repeatLimit!=0 && _repeatLimit<=modeState(state)._invocationCount;
   }
 
   /**
@@ -193,49 +190,9 @@ class Mode {
 
   bool terminate(AppState &state);
 
-  bool expired(AppState &state, uint32_t currentMillis) {
-    if (!isActive(state)) {
-      // Not active. Now way to expire.
-      return false;
-    }
-    if (_maxDuration==0) {
-      // No max.
-      return false;
-    }
-    bool expired = (modeState(state)._startMillis + _maxDuration) <= currentMillis;
-    if (expired) {
-      this->terminate(state);
-    }
-    return expired;
-  }
+  bool expired(const AppState &state) const;
 
-  bool triggered(AppState &state, uint32_t currentMillis) {
-    if (!isActive(state)) {
-      // Not active. Now way to trigger.
-      return false;
-    }
-    if (_perUnit==TimeUnitNone) {
-      // No period.
-      return false;
-    }
-    uint32_t period = 0;
-    switch (_perUnit) {
-      case TimeUnitDay:
-        period = 24 * 60 * 60 * 1000 / _perTimes;
-        break;
-      case TimeUnitHour:
-        period = 60 * 60 * 1000 / _perTimes;
-        break;
-      case TimeUnitNone:
-        return false; // No period behavior
-    }
-    // printf("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
-    bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + period) <= currentMillis;
-    if (triggered) {
-      modeState(state)._lastTriggerMillis = currentMillis;
-    }
-    return triggered;
-  }
+  bool triggered(const AppState &state) const;
 
   void dump(const AppState &state) const {
     printf("Mode: \"%12s\" [%8s][%7s]", _name,
@@ -436,20 +393,20 @@ class AppState {
     // dump();
   }
 
-  void onTime() {
+  bool checkTimeTriggers() const {
     bool changed = false;
-    uint32_t millis = _clock->millis();
-    AppState oldState(*this);
-    if (ModeLowPowerGpsSearch.isActive(*this)) {
-      changed |= ModeLowPowerGpsSearch.expired(*this, millis);
-    }
-    if (ModePeriodicSend.isActive(*this)) {
-      if (ModePeriodicSend.triggered(*this, millis)) {
-        ModeSend.activate(*this);
-        changed |= true;
-      }
-    }
-    if (changed) {
+
+    changed |= ModeLowPowerGpsSearch.expired(*this);
+
+    changed |= ModePeriodicJoin.triggered(*this);
+    changed |= ModePeriodicSend.triggered(*this);
+
+    return changed;
+  }
+
+  void onTime() {
+    if (checkTimeTriggers()) {
+      AppState oldState(*this);
       setDependent(oldState);
     }
   }
