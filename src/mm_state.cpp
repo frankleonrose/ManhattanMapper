@@ -254,76 +254,46 @@ bool Mode::terminate(AppState &state) {
   return true;
 }
 
-bool Mode::propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState) {
-  // Terminating condition vs containing running Modes? Terminating condition wins.
-  // Similarly, terminating condition wins against minimum active duration.
-  // (If cell with minimum should persist beyond parent, use another mechanism, like detached sequence.)
-  // Parent not inspiring, all children get deactivated (unless shared).
+uint8_t Mode::decSupportiveParents(const AppState &state) {
+  if (state.changeCounter()!=_supportiveFrame) {
+    printf("Resetting parents to %d\n", (int)_countParents);
+    _supportiveParents = _countParents;
+    _supportiveFrame = state.changeCounter();
+  }
+  --_supportiveParents;
+  printf("Remaining supportive parents = %d\n", (int)_supportiveParents);
+  return _supportiveParents;
+}
 
-  // printf("Propagating: %s with parent %u\n", name(), parentActivation);
-  // dump(state);
-
-  if (expired(state)
-      || (_invokeFunction!=NULL && !modeState(state)._invocationActive && modeState(oldState)._invocationActive)
-      || (isActive(state) && !requiredState(state))) {
-    // Activate and unable to be.
-    terminate(state);
-  }
-  else if (!isActive(state) &&
-      (parentActivation==ActivationDefaultCell
-      || (parentActivation==ActivationInspiring && requiredState(state))
-      || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState)))) {
-    // Either parent activation or requiredState (or both) just transitioned to true.
-    if (parentActivation==ActivationInspiring) {
-      reset(state); // Reset invocation count. We're in a fresh parent!
-    }
-    activate(state);
-  }
-  else if (isActive(state) && (parentActivation==ActivationExpiring || parentActivation==ActivationInactive)) {
-    // Active but parent not supportive. Record that parent not supportive.
-    if (state.changeCounter()!=_supportiveFrame) {
-      _supportiveParents = _countParents;
-      _supportiveFrame = state.changeCounter();
-    }
-    --_supportiveParents;
-    if (_supportiveParents==0) {
-      terminate(state);
-    }
-    else {
-      return false; // Parent is dead/dying, so it won't be doing any barren logic.
-    }
-  }
+bool Mode::propagateActive(const ActivationType parentActivation, const ActivationType myActivation, AppState &state, const AppState &oldState) {
 
   bool barren = true;
-  ActivationType myActivation = activation(state, oldState);
-  bool imActive = isActive(state);
 
   int limit = INT_MAX;
   int remaining = INT_MAX;
-  if (imActive) {
-    // Figure out how many children may be inspired
-    if (_childSimultaneousLimit!=0) {
-      limit = _childSimultaneousLimit;
-      for (auto m = _children.begin(); m!=_children.end(); ++m) {
-        if ((*m)->isActive(state)) {
-          --limit;
-        }
+
+  // Figure out how many children may be inspired
+  if (_childSimultaneousLimit!=0) {
+    limit = _childSimultaneousLimit;
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      if ((*m)->isActive(state)) {
+        --limit;
       }
     }
-    if (_childActivationLimit!=0) {
-      remaining = (int)_childActivationLimit - (int)modeState(state)._childInspirationCount;
-      limit = std::min(limit, remaining);
-    }
-    if (limit==0) {
-      myActivation = ActivationSustaining;
-    }
   }
+  if (_childActivationLimit!=0) {
+    // Track remaining in order to figure out if any children can be inspired in the future.
+    remaining = (int)_childActivationLimit - (int)modeState(state)._childInspirationCount;
+    limit = std::min(limit, remaining);
+  }
+  ActivationType childActivation = (limit==0) ? ActivationSustaining : myActivation;
 
+  bool skippedDefault = false;
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
     auto mode = *m;
-    if (_defaultMode!=mode || !imActive || myActivation==ActivationSustaining) {
+    if (_defaultMode!=mode || childActivation==ActivationSustaining) {
       bool oldActive = mode->isActive(state);
-      bool active = mode->propagate(myActivation, state, oldState);
+      bool active = mode->propagate(childActivation, state, oldState);
       barren &= !active;
 
       if (!oldActive && active) {
@@ -333,19 +303,31 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
         --limit;
         if (limit==0) {
           // We've reached the limit of our inspiration. Proceed with just sustaining power.
-          myActivation = ActivationSustaining;
+          childActivation = ActivationSustaining;
+          if (skippedDefault) {
+            // Now that we're in sustaining mode, propagate to _defaultMode that we skipped.
+            bool active = mode->propagate(childActivation, state, oldState);
+            barren &= !active;
+            skippedDefault = false;
+          }
         }
       }
     }
+    else {
+      skippedDefault |= _defaultMode==mode;
+    }
   }
 
-  if (imActive && !_children.empty() && remaining==0 && barren && !persistent(state)) {
+  if (!_children.empty() && remaining==0 && barren && !persistent(state)) {
+    assert(limit==0); // If remaining is 0, limit must be, too.
+    assert(!skippedDefault); // If limit is 0, logic above will have propagated to default
+    assert(childActivation==ActivationSustaining);
     printf("Terminating for barren and no capacity to inspire children: %s\n", name());
     terminate(state);
   }
-  else if (imActive && myActivation!=ActivationSustaining) {
-    // We don't care about children if we're not active - they all get shut down
+  else if (childActivation!=ActivationSustaining) {
     if (_defaultMode!=NULL) {
+      assert(skippedDefault);
       // We have default cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
         if (limit>0) {
@@ -362,10 +344,11 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
       }
     }
     else { // No default Mode
+      assert(!skippedDefault);
       if (barren) {
-        // Barren cells lose activation, unless we are explicitly kept active as defaultCell or persistent(because periodic)
+        // Barren cells lose activation, unless we are explicitly kept active as defaultCell or persistent(because periodic or min duration)
         if (parentActivation!=ActivationDefaultCell && !persistent(state)) {
-          // printf("Terminating for barrenness: %s\n", name());
+          printf("Terminating for barrenness: %s\n", name());
           terminate(state);
         }
       }
@@ -377,6 +360,61 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
 
   return isActive(state);
+}
+
+bool Mode::propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState) {
+  // Terminating condition vs containing running Modes? Terminating condition wins.
+  // Similarly, terminating condition wins against minimum active duration.
+  // (If cell with minimum should persist beyond parent, use another mechanism, like detached sequence.)
+  // Parent not inspiring, all children get deactivated (unless shared).
+
+  // printf("Propagating: %s with parent %u\n", name(), parentActivation);
+  // dump(state);
+
+  if (isActive(state)) {
+    // Active. Should terminate?
+    if (expired(state)
+        || invocationTerminated(state, oldState)
+        || !requiredState(state)) {
+      // Regardless of other parents, this cell cannot be active.
+      terminate(state);
+    }
+    else if (parentActivation==ActivationExpiring || parentActivation==ActivationInactive) {
+      // Record that parent not supportive.
+      printf("Checking active %s for termination\n", name());
+      if (0==decSupportiveParents(state)) {
+        terminate(state);
+      }
+      else {
+        // Don't propagate until all parent statuses are determined.
+        return false; // Parent is dead/dying, so it won't be doing any barren logic.
+      }
+    }
+  }
+  else {
+    // Not active. Should activate?
+    if (parentActivation==ActivationDefaultCell
+        || (parentActivation==ActivationInspiring && requiredState(state))
+        || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState))) {
+      // Either parent activation or requiredState (or both) just transitioned to true.
+      if (parentActivation==ActivationInspiring) {
+        reset(state); // Reset invocation count. We're in a fresh parent!
+      }
+      activate(state);
+    }
+  }
+
+  ActivationType myActivation = activation(state, oldState);
+  if (isActive(state)) { // Yes, re-call isActive because it may have changed above
+    return propagateActive(parentActivation, myActivation, state, oldState);
+  }
+  else {
+    // We don't care about barren & default processing if we're not active - they all get shut down
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      (*m)->propagate(myActivation, state, oldState);
+    }
+    return false;
+  }
 }
 
 void Executor::exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *mode) {

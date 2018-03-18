@@ -191,6 +191,7 @@ class Mode {
   const ModeState &modeState(const AppState &state) const;
 
   bool propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState);
+  bool propagateActive(const ActivationType parentActivation, const ActivationType myActivation, AppState &state, const AppState &oldState);
 
   void reset(AppState &state) {
     // Enable mode to be used again.
@@ -205,6 +206,12 @@ class Mode {
     // Cannot be used again.
     return _repeatLimit!=0 && _repeatLimit<=modeState(state)._invocationCount;
   }
+
+  bool invocationTerminated(const AppState &state, const AppState &oldState) const {
+    return _invokeFunction!=NULL && !modeState(state)._invocationActive && modeState(oldState)._invocationActive;
+  }
+
+  uint8_t decSupportiveParents(const AppState &state);
 
   bool insufficientGap(const AppState &state) const;
 
