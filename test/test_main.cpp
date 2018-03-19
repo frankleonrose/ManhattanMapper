@@ -1,11 +1,16 @@
 #include <Arduino.h>
 #include <unity.h>
 #include <vector>
+#include <Logging.h>
 
 #include "mm_state.h"
 
 #define UNIT_TEST
 #ifdef UNIT_TEST
+
+void printFn(const char c) {
+  printf("%c", c);
+}
 
 // void setUp(void) {
 // // set stuff up here
@@ -48,7 +53,7 @@ class TestExecutor : public Executor {
     va_list args;
     va_start(args, expected);
     while (expected!=NULL) {
-      printf("Expect: %p %s\n", expected, name(expected));
+      Log.Debug(F("Expect: %p %s\n"), expected, name(expected));
       _expected.push_back(expected);
       expected = va_arg(args, ListenerFn);
     }
@@ -57,29 +62,29 @@ class TestExecutor : public Executor {
 
   TestExecutor(ListenerFn expected, va_list &args) {
     while (expected!=NULL) {
-      printf("Expect: %p %s\n", expected, name(expected));
+      Log.Debug("Expect: %p %s\n", expected, name(expected));
       _expected.push_back(expected);
       expected = va_arg(args, ListenerFn);
     }
   }
 
   virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
-    printf("Exec: %p %s\n", listener, name(listener));
+    Log.Debug("Exec: %p %s\n", listener, name(listener));
     _called.push_back(listener);
   }
 
   bool check() {
     // TEST_ASSERT_EQUAL(_expected.size(), _called.size());
     if (_expected != _called) {
-      printf("Checking expected: ");
+      Log.Debug("Checking expected: ");
       for (auto pfn = _expected.begin(); pfn!=_expected.end(); ++pfn) {
-        printf("%s, ", name(*pfn));
+        Log.Debug("%s, ", name(*pfn));
       }
-      printf("\n......vs executed: ");
+      Log.Debug("\n......vs executed: ");
       for (auto pfn = _called.begin(); pfn!=_called.end(); ++pfn) {
-        printf("%s, ", name(*pfn));
+        Log.Debug("%s, ", name(*pfn));
       }
-      printf("\n");
+      Log.Debug("\n");
     }
     return _expected == _called;
   }
@@ -306,6 +311,9 @@ void test_send_every_10_min(void) {
 
 int main(int argc, char **argv) {
     UNITY_BEGIN();
+    LogPrinter printer(printFn);
+    Log.Init(LOG_LEVEL, printer);
+
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
     RUN_TEST(test_gps_power_after_low_power_successful_join);

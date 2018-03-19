@@ -2,6 +2,7 @@
 #undef min
 #undef max
 #include <vector>
+#include <Logging.h>
 #include "mm_state.h"
 
 Clock gClock;
@@ -47,6 +48,7 @@ int _force_initialization_ = []() -> int {
 }();
 
 void AppState::init() {
+  Log.Debug("AppState::init()" CR);
   ModeMain.detach(*this);
   ModeMain.attach(*this);
 
@@ -212,7 +214,7 @@ ActivationType Mode::activation(const AppState &state, const AppState &oldState)
 }
 
 bool Mode::activate(AppState &state) {
-  // printf("Activating: %s - ", name());
+  Log.Debug("Activating: %s\n", name());
   if (isActive(state)) {
     // Already active. Don't change anything.
     // printf("Already active\n");
@@ -225,7 +227,7 @@ bool Mode::activate(AppState &state) {
   }
   if (insufficientGap(state)) {
     // Not enough time has passed since last invocation
-    printf("Insufficient gap delay\n");
+    Log.Debug("Insufficient gap delay\n");
     return false;
   }
   modeState(state)._startIndex = state.changeCounter();
@@ -240,7 +242,7 @@ bool Mode::activate(AppState &state) {
 }
 
 bool Mode::terminate(AppState &state) {
-  // printf("Terminating: %s\n", name());
+  Log.Debug("Terminating: %s\n", name());
   if (!isActive(state)) {
     // Already inactive. Don't change anything.
     // printf("Not active\n");
@@ -256,12 +258,12 @@ bool Mode::terminate(AppState &state) {
 
 uint8_t Mode::decSupportiveParents(const AppState &state) {
   if (state.changeCounter()!=_supportiveFrame) {
-    printf("Resetting parents to %d\n", (int)_countParents);
+    Log.Debug("Resetting parents to %d\n", (int)_countParents);
     _supportiveParents = _countParents;
     _supportiveFrame = state.changeCounter();
   }
   --_supportiveParents;
-  printf("Remaining supportive parents = %d\n", (int)_supportiveParents);
+  Log.Debug("Remaining supportive parents = %d\n", (int)_supportiveParents);
   return _supportiveParents;
 }
 
@@ -322,7 +324,7 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
     assert(limit==0); // If remaining is 0, limit must be, too.
     assert(!skippedDefault); // If limit is 0, logic above will have propagated to default
     assert(childActivation==ActivationSustaining);
-    printf("Terminating for barren and no capacity to inspire children: %s\n", name());
+    Log.Debug("Terminating for barren and no capacity to inspire children: %s\n", name());
     terminate(state);
   }
   else if (childActivation!=ActivationSustaining) {
@@ -331,7 +333,7 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
       // We have default cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
         if (limit>0) {
-          printf("Activating default: %s\n", _defaultMode->name());
+          Log.Debug("Activating default: %s\n", _defaultMode->name());
           bool active = _defaultMode->propagate(ActivationDefaultCell, state, oldState);
           if (active) {
             ++modeState(state)._childInspirationCount;
@@ -339,7 +341,7 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
         }
       }
       else {
-        // printf("Terminating default: %s\n", _defaultMode->name());
+        Log.Debug("Terminating default: %s\n", _defaultMode->name());
         _defaultMode->propagate(ActivationInactive, state, oldState);
       }
     }
@@ -348,7 +350,7 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
       if (barren) {
         // Barren cells lose activation, unless we are explicitly kept active as defaultCell or persistent(because periodic or min duration)
         if (parentActivation!=ActivationDefaultCell && !persistent(state)) {
-          printf("Terminating for barrenness: %s\n", name());
+          Log.Debug("Terminating for barrenness: %s\n", name());
           terminate(state);
         }
       }
@@ -381,7 +383,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
     }
     else if (parentActivation==ActivationExpiring || parentActivation==ActivationInactive) {
       // Record that parent not supportive.
-      printf("Checking active %s for termination\n", name());
+      Log.Debug("Checking active %s for termination\n", name());
       if (0==decSupportiveParents(state)) {
         terminate(state);
       }
