@@ -113,7 +113,7 @@ class Mode {
   uint32_t _supportiveFrame = 0; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
 
   public:
-  Mode(const char *name, uint8_t repeatLimit, uint32_t minDuration = 0, uint32_t maxDuration = 0);
+  Mode(const char *name, uint8_t repeatLimit = 0, uint32_t minDuration = 0, uint32_t maxDuration = 0);
 
   /** Construct periodic Mode. */
   Mode(const char *name, uint16_t times, TimeUnit perUnit);

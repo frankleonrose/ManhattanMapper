@@ -11,7 +11,7 @@ Executor gExecutor;
 
 // Shared
 Mode ModeAttemptJoin("AttemptJoin", attemptJoin);
-Mode ModeSend("Send", 1);
+Mode ModeSend("Send");
   Mode ModeSendNoAck("SendNoAck", sendLocation);
   Mode ModeSendAck("SendAck", sendLocationAck);
 
@@ -200,6 +200,7 @@ bool Mode::persistent(const AppState &state) const {
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       Mode *mode = *m;
       Log.Debug(" %s invocations=%u limit=%u\n", mode->name(), mode->modeState(state)._invocationCount, mode->_repeatLimit);
+      persist |= !mode->hitRepeatLimit(state);
     }
     // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
   }
