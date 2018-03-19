@@ -107,8 +107,8 @@ void test_gps_power_while_power(void) {
     TestExecutor expectedOps(NULL);
     state.setExecutor(&expectedOps);
 
-    TEST_ASSERT_EQUAL(false, state.getUsbPower());
-    TEST_ASSERT_EQUAL(false, state.getGpsPower());
+    TEST_ASSERT_FALSE(state.getUsbPower());
+    TEST_ASSERT_FALSE(state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -119,8 +119,8 @@ void test_gps_power_while_power(void) {
 
     state.setUsbPower(true);
 
-    TEST_ASSERT_EQUAL(true, state.getUsbPower());
-    TEST_ASSERT_EQUAL(true, state.getGpsPower());
+    TEST_ASSERT(state.getUsbPower());
+    TEST_ASSERT(state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -131,8 +131,8 @@ void test_gps_power_while_power(void) {
 
     state.setUsbPower(false);
 
-    TEST_ASSERT_EQUAL(false, state.getUsbPower());
-    TEST_ASSERT_EQUAL(false, state.getGpsPower());
+    TEST_ASSERT_FALSE(state.getUsbPower());
+    TEST_ASSERT_FALSE(state.getGpsPower());
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -147,9 +147,9 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   AppState state(&clock, &expectedOps);
   state.init();
 
-  TEST_ASSERT_EQUAL(false, state.getUsbPower());
-  TEST_ASSERT_EQUAL(false, state.getJoined());
-  TEST_ASSERT_EQUAL(false, state.getGpsPower());
+  TEST_ASSERT_FALSE(state.getUsbPower());
+  TEST_ASSERT_FALSE(state.getJoined());
+  TEST_ASSERT_FALSE(state.getGpsPower());
 
   TEST_ASSERT(expectedOps.check());
 
@@ -165,8 +165,8 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
       }
     }
 
-    TEST_ASSERT_EQUAL(false, ModeAttemptJoin.isActive(state));
-    TEST_ASSERT_EQUAL(false, ModeLowPowerJoin.isActive(state));
+    TEST_ASSERT_FALSE(ModeAttemptJoin.isActive(state));
+    TEST_ASSERT_FALSE(ModeLowPowerJoin.isActive(state));
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -178,9 +178,9 @@ void test_gps_power_after_low_power_successful_join(void) {
   AppState state(&clock, &expectedOps);
   state.init();
 
-  TEST_ASSERT_EQUAL(false, state.getUsbPower());
-  TEST_ASSERT_EQUAL(false, state.getJoined());
-  TEST_ASSERT_EQUAL(false, state.getGpsPower());
+  TEST_ASSERT_FALSE(state.getUsbPower());
+  TEST_ASSERT_FALSE(state.getJoined());
+  TEST_ASSERT_FALSE(state.getGpsPower());
   TEST_ASSERT(expectedOps.check());
 
   {
@@ -193,10 +193,10 @@ void test_gps_power_after_low_power_successful_join(void) {
       state.setJoined(true);
     }
 
-    TEST_ASSERT_EQUAL(true, state.getJoined());
-    TEST_ASSERT_EQUAL(true, state.getGpsPower());
-    TEST_ASSERT_EQUAL(true, ModeLowPowerGpsSearch.isActive(state));
-    TEST_ASSERT_EQUAL(false, ModeSleep.isActive(state));
+    TEST_ASSERT(state.getJoined());
+    TEST_ASSERT(state.getGpsPower());
+    TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
+    TEST_ASSERT_FALSE(ModeSleep.isActive(state));
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -211,10 +211,10 @@ void test_5m_limit_on_gps_search(void) {
   state.setJoined(true);
   state.complete(ModeAttemptJoin);
 
-  TEST_ASSERT_EQUAL(false, state.getUsbPower());
-  TEST_ASSERT_EQUAL(true, state.getJoined());
-  TEST_ASSERT_EQUAL(true, state.getGpsPower());
-  TEST_ASSERT_EQUAL(true, ModeLowPowerGpsSearch.isActive(state));
+  TEST_ASSERT_FALSE(state.getUsbPower());
+  TEST_ASSERT(state.getJoined());
+  TEST_ASSERT(state.getGpsPower());
+  TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
   {
@@ -223,13 +223,13 @@ void test_5m_limit_on_gps_search(void) {
 
     clock.advanceSeconds(60);
     state.loop();
-    TEST_ASSERT_EQUAL(true, ModeLowPowerGpsSearch.isActive(state));
-    TEST_ASSERT_EQUAL(false, ModeSleep.isActive(state));
+    TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
+    TEST_ASSERT_FALSE(ModeSleep.isActive(state));
 
     clock.advanceSeconds(4 * 60);
     state.loop();
-    TEST_ASSERT_EQUAL(false, ModeLowPowerGpsSearch.isActive(state));
-    TEST_ASSERT_EQUAL(true, ModeSleep.isActive(state));
+    TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
+    TEST_ASSERT(ModeSleep.isActive(state));
 
     TEST_ASSERT(expectedOps.check());
   }
@@ -246,10 +246,10 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
   clock.advanceSeconds(seconds);
   state.loop();
 
-  TEST_ASSERT_EQUAL_MESSAGE(true, ModePeriodicSend.isActive(state), context);
-  TEST_ASSERT_EQUAL_MESSAGE(true, ModeSend.isActive(state), context);
-  TEST_ASSERT_EQUAL_MESSAGE(true, ModeSendAck.isActive(state) ^ ModeSendNoAck.isActive(state), context);
-  TEST_ASSERT_EQUAL_MESSAGE(false, ModeSleep.isActive(state), context);
+  TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
+  TEST_ASSERT_MESSAGE(ModeSend.isActive(state), context);
+  TEST_ASSERT_MESSAGE(ModeSendAck.isActive(state) ^ ModeSendNoAck.isActive(state), context);
+  TEST_ASSERT_FALSE_MESSAGE(ModeSleep.isActive(state), context);
 
   if (ModeSendAck.isActive(state)) {
     state.complete(ModeSendAck);
@@ -259,9 +259,9 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
   }
   state.loop();
 
-  TEST_ASSERT_EQUAL_MESSAGE(true, ModePeriodicSend.isActive(state), context);
-  TEST_ASSERT_EQUAL_MESSAGE(false, ModeSend.isActive(state), context);
-  TEST_ASSERT_EQUAL_MESSAGE(false, ModeSleep.isActive(state), context);
+  TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
+  TEST_ASSERT_FALSE_MESSAGE(ModeSend.isActive(state), context);
+  TEST_ASSERT_FALSE_MESSAGE(ModeSleep.isActive(state), context);
 
   TEST_ASSERT_MESSAGE(expectedOps.check(), context);
 }
@@ -280,12 +280,12 @@ void test_send_every_10_min(void) {
     state.setJoined(true);
   }
 
-  TEST_ASSERT_EQUAL(true, state.getUsbPower());
-  TEST_ASSERT_EQUAL(true, state.getJoined());
-  TEST_ASSERT_EQUAL(true, state.getGpsPower());
-  TEST_ASSERT_EQUAL(false, ModeSleep.isActive(state));
-  TEST_ASSERT_EQUAL(false, ModeAttemptJoin.isActive(state));
-  TEST_ASSERT_EQUAL(false, ModeLowPowerJoin.isActive(state));
+  TEST_ASSERT(state.getUsbPower());
+  TEST_ASSERT(state.getJoined());
+  TEST_ASSERT(state.getGpsPower());
+  TEST_ASSERT_FALSE(ModeSleep.isActive(state));
+  TEST_ASSERT_FALSE(ModeAttemptJoin.isActive(state));
+  TEST_ASSERT_FALSE(ModeLowPowerJoin.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
   startedSendAfter("[first pass]", state, clock, 1, NULL);
@@ -298,9 +298,9 @@ void test_send_every_10_min(void) {
     clock.advanceSeconds(5 * 60); // 5 minutes here
     state.loop();
 
-    TEST_ASSERT_EQUAL(true, ModePeriodicSend.isActive(state));
-    TEST_ASSERT_EQUAL(false, ModeSend.isActive(state));
-    TEST_ASSERT_EQUAL(false, ModeSleep.isActive(state));
+    TEST_ASSERT(ModePeriodicSend.isActive(state));
+    TEST_ASSERT_FALSE(ModeSend.isActive(state));
+    TEST_ASSERT_FALSE(ModeSleep.isActive(state));
 
     TEST_ASSERT(expectedOps.check());
   }
