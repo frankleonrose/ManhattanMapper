@@ -17,12 +17,15 @@
  */
 
 #include <Arduino.h>
+#include <limits.h>
 #include <cstdio>
 #include <cassert>
+#undef min
+#undef max
 #include <vector>
+#include <Logging.h>
 
 #define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
-#define GPS_POWER_PIN 50
 
 class AppState;
 class Mode;
@@ -437,7 +440,7 @@ class AppState {
       onChange(oldState);
     }
 
-    // dump();
+    dump();
   }
 
   bool checkTimeTriggers() const {

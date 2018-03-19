@@ -426,4 +426,27 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+#ifdef MOCK_ACTIONS
+
+void changeGpsPower(const AppState &state, const AppState &oldState) {
+  // Reify GpsPower value
+}
+
+void attemptJoin(const AppState &state, const AppState &oldState) {
+  // Enter the AttempJoin state, which is to say, call lorawan.join()
+}
+
+void changeSleep(const AppState &state, const AppState &oldState) {
+  // Enter or exit Sleep state
+}
+
+void sendLocation(const AppState &state, const AppState &oldState) {
+  // Send location
+}
+
+void sendLocationAck(const AppState &state, const AppState &oldState) {
+  // Send location
+}
+
+#endif
 #endif

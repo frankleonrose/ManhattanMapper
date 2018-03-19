@@ -1,5 +1,7 @@
 // https://github.com/adafruit/Adafruit_GPS/blob/master/examples/GPS_HardwareSerial_Parsing/GPS_HardwareSerial_Parsing.ino
 
+#ifndef UNIT_TEST
+
 #include <Adafruit_GPS.h>
 #include <Arduino.h>
 
@@ -85,3 +87,5 @@ void gpsDump(Print &printer) {
   //   printer.print("Satellites: "); printer.println((int)GPS.satellites);
   // }
 }
+
+#endif

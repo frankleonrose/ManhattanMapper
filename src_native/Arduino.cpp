@@ -36,5 +36,5 @@ size_t Print::print(unsigned long value, int base) {
   return printf(base==HEX ? "%lx" : "%lu", value);;
 }
 size_t Print::print(double value, int base) {
-  return printf("%d", value);
+  return printf("%lf", value);
 }

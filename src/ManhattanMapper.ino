@@ -23,7 +23,7 @@
  * - When low power and nothing happening, sleep                                            [test_join_once_when_low_power_then_sleep_on_fail]
  * - When low power and not joined, attempt join once                                       [test_join_once_when_low_power_then_sleep_on_fail]
  * - When low power and joined, power on GPS                                                [test_gps_power_and_send_after_low_power_successful_join]
- * - When low power and gpsfix, send once                                                   TODO LowPowerFix which terminates parent (LowPowerGpsSearch) on completion
+ * - When low power and gpsfix, send once                                                   [test_gps_power_and_send_after_low_power_successful_join]
  * - When low power and gpsfix, store location once                                         TODO LowPowerFix terminates when BOTH send & store complete
  * - When low power and joined and sent once, sleep                                         [test_gps_power_and_send_after_low_power_successful_join]
  * - When low power and joined and waketime > 5m, sleep (still awake because no gpsfix)     [test_5m_limit_on_low_power_gps_search]
@@ -39,6 +39,7 @@
 #include <ParameterStore.h>
 #include <RamStore.h>
 #include <LoraStack.h>
+#include "mm_state.h"
 
 #include <Timer.h>
 
@@ -70,6 +71,7 @@ const unsigned TX_INTERVAL_SEC = 20; // 3600 // Every hour
 static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 
 // Pin mapping
+#define GPS_POWER_PIN 50
 #define LORA_CS 8
 const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
 // Feather LoRa wiring (with IO1 <--> GPIO#6)
@@ -313,3 +315,34 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
     Log.DebugArgs(fmt, args);
     va_end(args);
 }
+
+#ifndef MOCK_ACTIONS
+
+void changeGpsPower(const AppState &state, const AppState &oldState) {
+  // Reify GpsPower value
+  Log.Debug("Setting GPS power: %d", state.getGpsPower());
+  digitalWrite(GPS_POWER_PIN, state.getGpsPower());
+}
+
+void attemptJoin(const AppState &state, const AppState &oldState) {
+  // Enter the AttempJoin state, which is to say, call lorawan.join()
+  Log.Debug("Attempting join...");
+  lorawan.join();
+}
+
+void changeSleep(const AppState &state, const AppState &oldState) {
+  // Enter or exit Sleep state
+  Log.Debug("Entering sleep mode...");
+}
+
+void sendLocation(const AppState &state, const AppState &oldState) {
+  // Send location
+  Log.Debug("Sending current location...");
+}
+
+void sendLocationAck(const AppState &state, const AppState &oldState) {
+  // Send location
+  Log.Debug("Sending current location with ACK...");
+}
+
+#endif
