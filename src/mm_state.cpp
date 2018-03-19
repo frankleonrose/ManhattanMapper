@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <limits.h>
 #undef min
 #undef max
 #include <vector>
@@ -178,7 +179,7 @@ bool Mode::triggered(const AppState &state) const {
     case TimeUnitNone:
       return false; // No period behavior
   }
-  // printf("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
+  // Log.Debug("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
   bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + period) <= state.millis();
   return triggered;
 }
@@ -195,13 +196,12 @@ bool Mode::persistent(const AppState &state) const {
   }
   if (_perUnit!=TimeUnitNone) {
     // As long as one child has supply to be inspired, we persist.
-    // printf("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
+    // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       Mode *mode = *m;
-      // printf(" %s invocations=%u limit=%u\n", mode->name(), mode->modeState(state)._invocationCount, mode->_repeatLimit);
-      persist |= !hitRepeatLimit(state);
+      Log.Debug(" %s invocations=%u limit=%u\n", mode->name(), mode->modeState(state)._invocationCount, mode->_repeatLimit);
     }
-    // printf("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
+    // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
   }
   return persist;
 }
@@ -226,12 +226,12 @@ bool Mode::activate(AppState &state) {
   Log.Debug("Activating: %s\n", name());
   if (isActive(state)) {
     // Already active. Don't change anything.
-    // printf("Already active\n");
+    // Log.Debug("Already active\n");
     return false;
   }
   if (hitRepeatLimit(state)) {
     // Hit repeat limit. Don't activate.
-    // printf("Repeat limit\n");
+    // Log.Debug("Repeat limit\n");
     return false;
   }
   if (insufficientGap(state)) {
@@ -246,7 +246,7 @@ bool Mode::activate(AppState &state) {
   if (_invokeFunction!=NULL) {
     modeState(state)._invocationActive = true;
   }
-  // printf("Done %u\n", modeState(state)._invocationCount);
+  // Log.Debug("Done %u\n", modeState(state)._invocationCount);
   return true;
 }
 
@@ -254,7 +254,7 @@ bool Mode::terminate(AppState &state) {
   Log.Debug("Terminating: %s\n", name());
   if (!isActive(state)) {
     // Already inactive. Don't change anything.
-    // printf("Not active\n");
+    // Log.Debug("Not active\n");
     return false;
   }
   modeState(state)._startIndex = 0; // Inactive
@@ -379,7 +379,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   // (If cell with minimum should persist beyond parent, use another mechanism, like detached sequence.)
   // Parent not inspiring, all children get deactivated (unless shared).
 
-  // printf("Propagating: %s with parent %u\n", name(), parentActivation);
+  // Log.Debug("Propagating: %s with parent %u\n", name(), parentActivation);
   // dump(state);
 
   if (isActive(state)) {

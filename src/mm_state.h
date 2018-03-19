@@ -227,14 +227,20 @@ class Mode {
   bool triggered(const AppState &state) const;
 
   void dump(const AppState &state) const {
-    printf("Mode: \"%20s\" [%8s][%7s]", _name,
+    Log.Debug_("Mode: \"%20s\" [%8s][%7s]", _name,
       (isActive(state) ? "Active" : "Inactive"),
       (requiredState(state) ? "Ready" : "Unready"));
-    if (_childSimultaneousLimit!=0) printf(" childSimultaneous: %d", (int)_childSimultaneousLimit);
-    if (_children.size()>0) printf(" childInspirations: %d [%d]", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
-    if (_perUnit != TimeUnitNone) printf(" lastTrigger: %u", modeState(state)._lastTriggerMillis);
-    if (_invokeFunction!=NULL) printf(" [%11s]", modeState(state)._invocationActive ? "Running" : "Not running");
-    printf("\n");
+    if (_repeatLimit==0) {
+      Log.Debug_(" invocations: %d,", (int)modeState(state)._invocationCount);
+    }
+    else {
+      Log.Debug_(" invocations: %d of [%d],", (int)modeState(state)._invocationCount, (int)_repeatLimit);
+    }
+    if (_childSimultaneousLimit!=0) Log.Debug_(" childSimultaneous: %d,", (int)_childSimultaneousLimit);
+    if (_children.size()>0) Log.Debug_(" childInspirations: %d [limit %d],", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
+    if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
+    if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", modeState(state)._invocationActive ? "Running" : "Not running");
+    Log.Debug("\n");
   }
 };
 
@@ -318,7 +324,7 @@ class AppState {
   }
 
   void complete(Mode &mode) {
-    // printf("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
+    // Log.Debug("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
     if (!mode.modeState(*this)._invocationActive) {
       return;
     }
@@ -330,7 +336,7 @@ class AppState {
   }
 
   void cancel(Mode &mode) {
-    // printf("----------- cancelled: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
+    // Log.Debug("----------- cancelled: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
     if (!mode.modeState(*this)._invocationActive) {
       return;
     }
@@ -401,12 +407,12 @@ class AppState {
   }
 
   void dump() const {
-    printf("AppState:\n");
-    printf("- Millis:             %lu\n", _clock->millis());
-    printf("- Counter:            %u\n", _changeCounter);
-    printf("- USB Power [Input]:  %d\n", _usbPower);
-    printf("- Joined [Input]:     %d\n", _joined);
-    printf("- GPS Power [Output]: %d\n", _gpsPowerOut);
+    Log.Debug("AppState:\n");
+    Log.Debug("- Millis:             %lu", (long unsigned)_clock->millis());
+    Log.Debug("- Counter:            %lu", (long unsigned)_changeCounter);
+    Log.Debug("- USB Power [Input]:  %d", _usbPower);
+    Log.Debug("- Joined [Input]:     %d", _joined);
+    Log.Debug("- GPS Power [Output]: %d", _gpsPowerOut);
     ModeMain.dump(*this);
     ModeSleep.dump(*this);
     ModeLowPowerJoin.dump(*this);
