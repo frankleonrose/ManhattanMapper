@@ -258,15 +258,15 @@ class AppState {
   uint32_t _changeCounter = 1;
 
   // External state
-  bool _usbPower;
-  bool _gpsFix;
+  bool _usbPower = false;
+  bool _gpsFix = false;
 
   // Dependent state - no setters
-  bool _joined;
-  bool _gpsPowerOut;
+  bool _joined = false;
+  bool _gpsPowerOut = false;
 
   uint8_t _modesCount = 0;
-  ModeState _modeStates[10];
+  ModeState _modeStates[15];
 
   public:
   AppState() : AppState(&gClock, &gExecutor)

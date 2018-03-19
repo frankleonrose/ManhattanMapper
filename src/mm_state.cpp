@@ -11,33 +11,56 @@ Executor gExecutor;
 // Shared
 Mode ModeAttemptJoin("AttemptJoin", attemptJoin);
 Mode ModeSend("Send", 1);
-Mode ModeSendNoAck("SendNoAck", sendLocation);
-Mode ModeSendAck("SendAck", sendLocationAck);
+  Mode ModeSendNoAck("SendNoAck", sendLocation);
+  Mode ModeSendAck("SendAck", sendLocationAck);
 
 // Main
 Mode ModeMain(NULL, 1);
   Mode ModeSleep("Sleep", changeSleep);
   Mode ModeLowPowerJoin("LowPowerJoin", 1);
   Mode ModeLowPowerGpsSearch("LowPowerGpsSearch", 1, MINUTES_IN_MILLIS(5), MINUTES_IN_MILLIS(5));
+  Mode ModeLowPowerSend("LowPowerSend", 1);
   Mode ModePeriodicSend("PeriodicSend", 6, TimeUnitHour);
   Mode ModePeriodicJoin("PeriodicJoin", 12, TimeUnitHour);
 
 std::vector<Mode*> InvokeModes;
-int _force_initialization_ = []() -> int {
+int _static_initialization_ = []() -> int {
   ModeMain.addChild(&ModeSleep);
   ModeMain.defaultMode(&ModeSleep);
   ModeMain.addChild(&ModeLowPowerJoin);
   ModeMain.addChild(&ModeLowPowerGpsSearch);
-  ModeMain.addChild(&ModePeriodicSend);
+  ModeMain.addChild(&ModeLowPowerSend);
   ModeMain.addChild(&ModePeriodicJoin);
+  ModeMain.addChild(&ModePeriodicSend);
+
   ModeLowPowerJoin.addChild(&ModeAttemptJoin);
+  ModeLowPowerSend.addChild(&ModeSend);
+
   ModePeriodicJoin.addChild(&ModeAttemptJoin);
   ModePeriodicSend.addChild(&ModeSend);
+
   ModeSend.addChild(&ModeSendAck);
   ModeSendAck.minGapDuration(DAYS_IN_MILLIS(1));
   ModeSend.addChild(&ModeSendNoAck);
   ModeSend.childActivationLimit(1);
   ModeSend.childSimultaneousLimit(1);
+
+  ModeLowPowerJoin.requiredFunction([](const AppState &state) -> bool {
+    return !state.getUsbPower() && !state.getJoined();
+  });
+  ModeLowPowerGpsSearch.requiredFunction([](const AppState &state) -> bool {
+    return !state.getUsbPower() && state.getJoined() && !state.getGpsFix();
+  });
+  ModeLowPowerSend.requiredFunction([](const AppState &state) -> bool {
+    return !state.getUsbPower() && state.getJoined() && state.getGpsFix();
+  });
+
+  ModePeriodicSend.requiredFunction([](const AppState &state) -> bool {
+    return state.getUsbPower() && state.getJoined();
+  });
+  ModePeriodicJoin.requiredFunction([](const AppState &state) -> bool {
+    return state.getUsbPower() && !state.getJoined();
+  });
 
   InvokeModes.push_back(&ModeSleep);
   InvokeModes.push_back(&ModeAttemptJoin);
@@ -51,20 +74,6 @@ void AppState::init() {
   Log.Debug("AppState::init()" CR);
   ModeMain.detach(*this);
   ModeMain.attach(*this);
-
-  ModeLowPowerJoin.requiredFunction([](const AppState &state) -> bool {
-    return !state._usbPower && !state._joined;
-  });
-  ModeLowPowerGpsSearch.requiredFunction([](const AppState &state) -> bool {
-    return !state._usbPower && state._joined && !state._gpsFix;
-  });
-
-  ModePeriodicSend.requiredFunction([](const AppState &state) -> bool {
-    return state._usbPower && state._joined;
-  });
-  ModePeriodicJoin.requiredFunction([](const AppState &state) -> bool {
-    return state._usbPower && !state._joined;
-  });
 
   // Main is always active
   ModeMain.activate(*this);

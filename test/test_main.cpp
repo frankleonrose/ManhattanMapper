@@ -78,11 +78,11 @@ class TestExecutor : public Executor {
     if (_expected != _called) {
       Log.Debug("Checking expected: ");
       for (auto pfn = _expected.begin(); pfn!=_expected.end(); ++pfn) {
-        Log.Debug("%s, ", name(*pfn));
+        Log.Debug_("%s, ", name(*pfn));
       }
       Log.Debug("\n......vs executed: ");
       for (auto pfn = _called.begin(); pfn!=_called.end(); ++pfn) {
-        Log.Debug("%s, ", name(*pfn));
+        Log.Debug_("%s, ", name(*pfn));
       }
       Log.Debug("\n");
     }
@@ -172,7 +172,7 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   }
 }
 
-void test_gps_power_after_low_power_successful_join(void) {
+void test_gps_power_and_send_after_low_power_successful_join(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state(&clock, &expectedOps);
@@ -200,9 +200,39 @@ void test_gps_power_after_low_power_successful_join(void) {
 
     TEST_ASSERT(expectedOps.check());
   }
+
+  {
+    TestExecutor expectedOps(changeGpsPower, sendLocationAck, NULL);
+    state.setExecutor(&expectedOps);
+
+    state.setGpsFix(true);
+
+    TEST_ASSERT(state.getJoined());
+    TEST_ASSERT_FALSE(state.getGpsPower());
+    TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
+    TEST_ASSERT(ModeSend.isActive(state));
+    TEST_ASSERT_FALSE(ModeSleep.isActive(state));
+
+    TEST_ASSERT(expectedOps.check());
+  }
+
+  {
+    TestExecutor expectedOps(changeSleep, NULL);
+    state.setExecutor(&expectedOps);
+
+    state.complete(ModeSendAck);
+
+    TEST_ASSERT(state.getJoined());
+    TEST_ASSERT_FALSE(state.getGpsPower());
+    TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
+    TEST_ASSERT_FALSE(ModeSend.isActive(state));
+    TEST_ASSERT(ModeSleep.isActive(state));
+
+    TEST_ASSERT(expectedOps.check());
+  }
 }
 
-void test_5m_limit_on_gps_search(void) {
+void test_5m_limit_on_low_power_gps_search(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state(&clock, &expectedOps);
@@ -213,6 +243,7 @@ void test_5m_limit_on_gps_search(void) {
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT(state.getJoined());
+  TEST_ASSERT_FALSE(state.getGpsFix());
   TEST_ASSERT(state.getGpsPower());
   TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
   TEST_ASSERT(expectedOps.check());
@@ -386,8 +417,8 @@ int main(int argc, char **argv) {
 
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);
-    RUN_TEST(test_gps_power_after_low_power_successful_join);
-    RUN_TEST(test_5m_limit_on_gps_search);
+    RUN_TEST(test_gps_power_and_send_after_low_power_successful_join);
+    RUN_TEST(test_5m_limit_on_low_power_gps_search);
     RUN_TEST(test_join_every_5_min);
     RUN_TEST(test_send_every_10_min);
     UNITY_END();
