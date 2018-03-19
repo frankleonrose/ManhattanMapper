@@ -413,7 +413,7 @@ void test_send_every_10_min(void) {
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     LogPrinter printer(printFn);
-    Log.Init(LOG_LEVEL, printer);
+    Log.Init(LOGLEVEL, printer);
 
     RUN_TEST(test_gps_power_while_power);
     RUN_TEST(test_join_once_when_low_power_then_sleep_on_fail);

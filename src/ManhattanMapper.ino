@@ -44,7 +44,7 @@
 
 #include "gps.h"
 
-#define LOG_LEVEL LOG_LEVEL_DEBUG //  _INFOS, _DEBUG, _VERBOSE, _NOOUTPUT
+// #define LOGLEVEL LOG_LEVEL_DEBUG //  _NOOUTPUT, _ERRORS, _WARNINGS, _INFOS, _DEBUG, _VERBOSE
 
 #if !defined(MIN)
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
@@ -216,7 +216,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, LOW);
 
     Serial.begin(115200);
-    Log.Init(LOG_LEVEL, Serial);
+    Log.Init(LOGLEVEL, Serial);
     // Wait for 15 seconds. If no Serial by then, keep going. We are not connected.
     for (int timeout=0; timeout<15 && !Serial; ++timeout) {
       delay(1000);
