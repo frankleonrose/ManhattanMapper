@@ -35,6 +35,7 @@ typedef bool (*StateModFn)(const AppState &state, const AppState &oldState);
 typedef bool (*StatePredicate)(const AppState &state);
 
 extern void changeGpsPower(const AppState &state, const AppState &oldState);
+extern void readGpsLocation(const AppState &state, const AppState &oldState);
 extern void attemptJoin(const AppState &state, const AppState &oldState);
 extern void changeSleep(const AppState &state, const AppState &oldState);
 extern void sendLocation(const AppState &state, const AppState &oldState);
@@ -230,7 +231,7 @@ class Mode {
   bool triggered(const AppState &state) const;
 
   void dump(const AppState &state) const {
-    Log.Debug_("Mode: \"%20s\" [%8s][%7s]", _name,
+    Log.Debug("Mode: \"%20s\" [%8s][%7s]", _name,
       (isActive(state) ? "Active" : "Inactive"),
       (requiredState(state) ? "Ready" : "Unready"));
     if (_repeatLimit==0) {
@@ -243,7 +244,7 @@ class Mode {
     if (_children.size()>0) Log.Debug_(" childInspirations: %d [limit %d],", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
     if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
     if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", modeState(state)._invocationActive ? "Running" : "Not running");
-    Log.Debug("\n");
+    Log.Debug_("\n");
   }
 };
 
@@ -253,8 +254,11 @@ extern Mode ModeSleep;
 extern Mode ModeAttemptJoin;
 extern Mode ModeLowPowerJoin;
 extern Mode ModeLowPowerGpsSearch;
+extern Mode ModeLowPowerSend;
 extern Mode ModePeriodicJoin;
 extern Mode ModePeriodicSend;
+extern Mode ModeReadAndSend;
+extern Mode ModeReadGps;
 extern Mode ModeSend;
 extern Mode ModeSendNoAck;
 extern Mode ModeSendAck;
@@ -269,6 +273,7 @@ class AppState {
   // External state
   bool _usbPower = false;
   bool _gpsFix = false;
+  bool _gpsLocation = false;
 
   // Dependent state - no setters
   bool _joined = false;
@@ -326,17 +331,7 @@ class AppState {
     // Process periodic triggers.
   }
 
-  void complete(Mode &mode) {
-    // Log.Debug("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
-    if (!mode.modeState(*this)._invocationActive) {
-      return;
-    }
-    AppState oldState(*this);
-
-    mode.modeState(*this)._invocationActive = false;
-
-    setDependent(oldState);
-  }
+  void complete(Mode &mode, void (*updateFn)(AppState &state) = NULL);
 
   void cancel(Mode &mode) {
     // Log.Debug("----------- cancelled: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
@@ -377,7 +372,7 @@ class AppState {
     setDependent(oldState);
   }
 
-  bool getGpsFix() const {
+  bool hasGpsFix() const {
     return _gpsFix;
   }
 
@@ -388,6 +383,20 @@ class AppState {
     }
     AppState oldState(*this);
     _gpsFix = value;
+    setDependent(oldState);
+  }
+
+  bool hasGpsLocation() const {
+    return _gpsLocation;
+  }
+
+  void setGpsLocation(bool value) {
+    if (_gpsLocation==value) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _gpsLocation = value;
     setDependent(oldState);
   }
 
@@ -411,18 +420,23 @@ class AppState {
 
   void dump() const {
     Log.Debug("AppState:\n");
-    Log.Debug("- Millis:             %lu", (long unsigned)_clock->millis());
-    Log.Debug("- Counter:            %lu", (long unsigned)_changeCounter);
-    Log.Debug("- USB Power [Input]:  %d", _usbPower);
-    Log.Debug("- Joined [Input]:     %d", _joined);
-    Log.Debug("- GPS Power [Output]: %d", _gpsPowerOut);
+    Log.Debug("- Millis:             %u\n", (long unsigned)_clock->millis());
+    Log.Debug("- Counter:            %u\n", (long unsigned)_changeCounter);
+    Log.Debug("- USB Power [Input]:  %T\n", _usbPower);
+    Log.Debug("- Joined [Input]:     %T\n", _joined);
+    Log.Debug("- GPS Power [Output]: %T\n", _gpsPowerOut);
+    Log.Debug("- GPS Fix [Input]:     %T\n", _gpsFix);
+    Log.Debug("- GPS Location [Input]: %T\n", _gpsLocation);
     ModeMain.dump(*this);
     ModeSleep.dump(*this);
     ModeLowPowerJoin.dump(*this);
     ModePeriodicJoin.dump(*this);
     ModeAttemptJoin.dump(*this);
     ModeLowPowerGpsSearch.dump(*this);
+    ModeLowPowerSend.dump(*this);
     ModePeriodicSend.dump(*this);
+    ModeReadAndSend.dump(*this);
+    ModeReadGps.dump(*this);
     ModeSend.dump(*this);
     ModeSendNoAck.dump(*this);
     ModeSendAck.dump(*this);

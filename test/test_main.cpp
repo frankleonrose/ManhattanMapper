@@ -43,6 +43,7 @@ static struct {
   FNAME(changeSleep),
   FNAME(sendLocation),
   FNAME(sendLocationAck),
+  FNAME(readGpsLocation),
 };
 
 class TestExecutor : public Executor {
@@ -189,8 +190,9 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 
     {
       StateTransaction transaction(state);
-      state.complete(ModeAttemptJoin);
-      state.setJoined(true);
+      state.complete(ModeAttemptJoin, [](AppState &state){
+        state.setJoined(true);
+      });
     }
 
     TEST_ASSERT(state.getJoined());
@@ -202,10 +204,14 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
   }
 
   {
-    TestExecutor expectedOps(changeGpsPower, sendLocationAck, NULL);
+    TestExecutor expectedOps(changeGpsPower, readGpsLocation, sendLocationAck, NULL);
     state.setExecutor(&expectedOps);
 
     state.setGpsFix(true);
+
+    state.complete(ModeReadGps, [](AppState &state){
+      state.setGpsLocation(true);
+    });
 
     TEST_ASSERT(state.getJoined());
     TEST_ASSERT_FALSE(state.getGpsPower());
@@ -238,12 +244,13 @@ void test_5m_limit_on_low_power_gps_search(void) {
   AppState state(&clock, &expectedOps);
   state.init();
 
-  state.setJoined(true);
-  state.complete(ModeAttemptJoin);
+  state.complete(ModeAttemptJoin, [](AppState &state){
+    state.setJoined(true);
+  });
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT(state.getJoined());
-  TEST_ASSERT_FALSE(state.getGpsFix());
+  TEST_ASSERT_FALSE(state.hasGpsFix());
   TEST_ASSERT(state.getGpsPower());
   TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
   TEST_ASSERT(expectedOps.check());
@@ -301,11 +308,8 @@ void test_join_every_5_min(void) {
   state.init();
 
   // Setup our state...
-  {
-    StateTransaction t(state);
-    state.setUsbPower(true);
-    state.complete(ModeAttemptJoin);
-  }
+  state.setUsbPower(true);
+  state.complete(ModeAttemptJoin);
 
   TEST_ASSERT(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -369,7 +373,7 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
 
 void test_send_every_10_min(void) {
   TestClock clock;
-  TestExecutor expectedOps(attemptJoin, changeGpsPower, sendLocationAck, NULL);
+  TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, sendLocationAck, NULL);
   AppState state(&clock, &expectedOps);
   state.init();
 
@@ -377,8 +381,20 @@ void test_send_every_10_min(void) {
   {
     StateTransaction t(state);
     state.setUsbPower(true);
-    state.complete(ModeAttemptJoin);
-    state.setJoined(true);
+    state.complete(ModeAttemptJoin, [](AppState &state){
+      state.setJoined(true);
+    });
+    state.setGpsFix(true);
+  }
+
+
+  {
+    StateTransaction t(state);
+    Log.Debug("\nCompleting ModeReadGps\n");
+    state.complete(ModeReadGps, [](AppState &state){
+      Log.Debug("\nSetting GPS location\n");
+      state.setGpsLocation(true);
+    });
   }
 
   TEST_ASSERT(state.getUsbPower());
@@ -407,7 +423,7 @@ void test_send_every_10_min(void) {
   }
 
   // Full period passes and we start another send.
-  startedSendAfter("[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, sendLocation, NULL);
+  startedSendAfter("[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, NULL);
 }
 
 int main(int argc, char **argv) {
@@ -430,6 +446,9 @@ int main(int argc, char **argv) {
 
 void changeGpsPower(const AppState &state, const AppState &oldState) {
   // Reify GpsPower value
+}
+
+void readGpsLocation(const AppState &state, const AppState &oldState) {
 }
 
 void attemptJoin(const AppState &state, const AppState &oldState) {

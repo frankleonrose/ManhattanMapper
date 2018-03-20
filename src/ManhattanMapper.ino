@@ -324,10 +324,14 @@ void changeGpsPower(const AppState &state, const AppState &oldState) {
   digitalWrite(GPS_POWER_PIN, state.getGpsPower());
 }
 
+void readGpsLocation(const AppState &state, const AppState &oldState) {
+  Log.Debug("Reading GPS location: %d", state.getGpsPower());
+}
+
 void attemptJoin(const AppState &state, const AppState &oldState) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
   Log.Debug("Attempting join...");
-  lorawan.join();
+  // lorawan.join();
 }
 
 void changeSleep(const AppState &state, const AppState &oldState) {
