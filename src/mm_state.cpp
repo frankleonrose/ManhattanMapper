@@ -91,6 +91,8 @@ void AppState::init() {
   AppState reference; // Initial rev to compare to
   // reference.dump();
   setDependent(reference);
+
+  _initialized = true;
 }
 
 Mode::Mode(const char *name, uint8_t repeatLimit, uint32_t minDuration, uint32_t maxDuration)

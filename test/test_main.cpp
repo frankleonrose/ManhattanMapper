@@ -102,7 +102,7 @@ class TestExecutor : public Executor {
 
 void test_gps_power_while_power(void) {
   AppState state;
-  state.init();
+  state.begin();
 
   {
     TestExecutor expectedOps(NULL);
@@ -146,7 +146,7 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state(&clock, &expectedOps);
-  state.init();
+  state.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -177,7 +177,7 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state(&clock, &expectedOps);
-  state.init();
+  state.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -242,7 +242,7 @@ void test_5m_limit_on_low_power_gps_search(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state(&clock, &expectedOps);
-  state.init();
+  state.begin();
 
   state.complete(ModeAttemptJoin, [](AppState &state){
     state.setJoined(true);
@@ -305,7 +305,7 @@ void test_join_every_5_min(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state(&clock, &expectedOps);
-  state.init();
+  state.begin();
 
   // Setup our state...
   state.setUsbPower(true);
@@ -375,7 +375,7 @@ void test_send_every_10_min(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, sendLocationAck, NULL);
   AppState state(&clock, &expectedOps);
-  state.init();
+  state.begin();
 
   // Setup our state...
   {

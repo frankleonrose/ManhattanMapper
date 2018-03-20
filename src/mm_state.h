@@ -267,6 +267,7 @@ extern std::vector<Mode*> InvokeModes;
 class AppState {
   Clock *_clock;
   Executor *_executor;
+  bool _initialized = false;
   uint16_t _holdLevel = 0;
   uint32_t _changeCounter = 1;
 
@@ -289,14 +290,22 @@ class AppState {
 
   AppState(Clock *clock, Executor *executor)
   : _clock(clock), _executor(executor),
+    _holdLevel(1),
     _usbPower(false),
     _joined(false),
     _gpsPowerOut(false)
   {
-    // ModeLowPowerJoin.setInspiration([] (AppState state, AppState oldState) { return true;})
   }
 
   void init();
+
+  void begin() {
+    if (!_initialized) {
+      init();
+    }
+    AppState reference;
+    resumeActions(reference);
+  }
 
   uint8_t allocateMode() {
     uint8_t alloc = _modesCount++;

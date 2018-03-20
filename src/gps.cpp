@@ -4,13 +4,16 @@
 
 #include <Adafruit_GPS.h>
 #include <Arduino.h>
+#include <Logging.h>
 
 HardwareSerial &gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
+void (*gReadSuccess)(const Adafruit_GPS &gps) = NULL;
+void (*gReadFailure)() = NULL;
 
 // Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
 // Set to 'true' if you want to debug and listen to the raw GPS sentences.
-#define GPSECHO  false
+#define GPSECHO false
 
 void gpsSetup()
 {
@@ -31,7 +34,7 @@ void gpsSetup()
   // print it out we don't suggest using anything higher than 1 Hz
 
   // Request updates on antenna status, comment out to keep quiet
-  GPS.sendCommand(PGCMD_ANTENNA);
+  GPS.sendCommand(PGCMD_NOANTENNA);
 
   delay(1000);
   // Ask for firmware version
@@ -47,14 +50,25 @@ void gpsLoop(Print &printer)
 
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
-    // a tricky thing here is if we print the NMEA sentence, or data
-    // we end up not listening and catching other sentences!
-    // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
-    //printer.println(GPS.lastNMEA());   // this also sets the newNMEAreceived() flag to false
-
-    if (!GPS.parse(GPS.lastNMEA()))   // this also sets the newNMEAreceived() flag to false
-      return;  // we can fail to parse a sentence in which case we should just wait for another
+    if (gReadSuccess!=NULL) {
+      Log.Debug("GPS string: %s\n", GPS.lastNMEA());
+      // We are interested in a new location
+      if (GPS.parse(GPS.lastNMEA())) {   // this also sets the newNMEAreceived() flag to false
+        gReadSuccess(GPS);
+      }
+      else {
+        gReadFailure();
+      }
+      gReadSuccess = NULL;
+      gReadFailure = NULL;
+    }
   }
+}
+
+void gpsRead(void (*success)(const Adafruit_GPS &gps), void (*failure)()) {
+  gReadSuccess = success;
+  gReadFailure = failure;
+  GPS.lastNMEA(); // Reset last reading
 }
 
 void gpsDump(Print &printer) {

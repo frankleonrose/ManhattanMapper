@@ -51,6 +51,8 @@
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #endif
 
+AppState gState;
+
 Timer timer;
 Timer gpsTimer;
 
@@ -111,6 +113,9 @@ void onEvent(void *ctx, uint32_t event) {
             break;
         case EV_JOINED:
             Log.Debug(F("EV_JOINED" CR));
+            gState.complete(ModeAttemptJoin, [](AppState &state){
+              state.setJoined(true);
+            });
             break;
         case EV_RFU1:
             Log.Debug(F("EV_RFU1" CR));
@@ -289,13 +294,17 @@ void setup() {
     // timer.every(TX_INTERVAL_SEC * 1000, sendTemp);
     gpsTimer.every(60 * 1000, dumpGps);
 
-    Log.Debug(F("Setup complete" CR));
-
-    // do_send();
-
-    node.join();
-
+    Log.Debug(F("Setup GPS" CR));
     gpsSetup();
+
+    Log.Debug(F("Setup Respire" CR));
+    gState.init();
+    gState.setUsbPower(true);
+    gState.setGpsFix(true);
+    gState.begin();
+    gState.dump();
+
+    Log.Debug(F("Setup complete" CR));
 }
 
 void loop() {
@@ -305,6 +314,8 @@ void loop() {
 
   timer.update();
   gpsTimer.update();
+
+  gState.loop();
 }
 
 void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
@@ -321,32 +332,47 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
 void changeGpsPower(const AppState &state, const AppState &oldState) {
   // Reify GpsPower value
   Log.Debug("Setting GPS power: %d", state.getGpsPower());
-  digitalWrite(GPS_POWER_PIN, state.getGpsPower());
+  //digitalWrite(GPS_POWER_PIN, state.getGpsPower());
 }
 
 void readGpsLocation(const AppState &state, const AppState &oldState) {
   Log.Debug("Reading GPS location: %d", state.getGpsPower());
+  gpsRead([](const Adafruit_GPS &gps) {
+    Log.Debug("Successfully read GPS\n");
+    gState.complete(ModeReadGps, [](AppState &state){
+      state.setGpsLocation(true);
+    });
+  }, []() {
+    Log.Error("Failed to read GPS\n");
+    gState.complete(ModeReadGps);
+  });
 }
 
 void attemptJoin(const AppState &state, const AppState &oldState) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
   Log.Debug("Attempting join...");
-  // lorawan.join();
+  node.join();
 }
 
 void changeSleep(const AppState &state, const AppState &oldState) {
   // Enter or exit Sleep state
-  Log.Debug("Entering sleep mode...");
+  Log.Debug("Entering sleep mode...\n");
 }
 
 void sendLocation(const AppState &state, const AppState &oldState) {
   // Send location
-  Log.Debug("Sending current location...");
+  Log.Debug("Sending current location...\n");
+  gState.complete(ModeSendNoAck, [](AppState &state){
+    state.setGpsLocation(false);
+  });
 }
 
 void sendLocationAck(const AppState &state, const AppState &oldState) {
   // Send location
-  Log.Debug("Sending current location with ACK...");
+  Log.Debug("Sending current location with ACK...\n");
+  gState.complete(ModeSendAck, [](AppState &state){
+    state.setGpsLocation(false);
+  });
 }
 
 #endif
