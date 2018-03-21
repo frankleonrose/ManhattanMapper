@@ -70,11 +70,7 @@ int _static_initialization_ = []() -> int {
     return state.getJoined() && state.hasGpsLocation();
   });
 
-  InvokeModes.push_back(&ModeSleep);
-  InvokeModes.push_back(&ModeAttemptJoin);
-  InvokeModes.push_back(&ModeReadGps);
-  InvokeModes.push_back(&ModeSendAck);
-  InvokeModes.push_back(&ModeSendNoAck);
+  ModeMain.collect(InvokeModes);
 
   return 0;
 }();

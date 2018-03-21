@@ -23,6 +23,7 @@
 #undef min
 #undef max
 #include <vector>
+#include <algorithm>
 #include <Logging.h>
 
 #define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
@@ -131,6 +132,18 @@ class Mode {
 
   void attach(AppState &state);
   void detach(AppState &state);
+
+  void collect(std::vector<Mode*> &invokeModes) {
+    if (_invokeFunction!=NULL) {
+      // Don't add duplicate modes. Can't use set<> because we need reliable order of execution (addChild order)
+      if (std::find(invokeModes.begin(), invokeModes.end(), this) == invokeModes.end()) {
+        invokeModes.push_back(this);
+      }
+    }
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      (*m)->collect(invokeModes);
+    }
+  }
 
   bool requiredState(const AppState &state) const {
     if (_requiredFunction==NULL) {
