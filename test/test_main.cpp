@@ -102,11 +102,14 @@ class TestExecutor : public Executor {
 
 void test_gps_power_while_power(void) {
   AppState state;
-  state.begin();
+  TestClock clock;
+  TestExecutor expectedOps(NULL);
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
   {
     TestExecutor expectedOps(NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     TEST_ASSERT_FALSE(state.getUsbPower());
     TEST_ASSERT_FALSE(state.getGpsPower());
@@ -116,7 +119,7 @@ void test_gps_power_while_power(void) {
 
   {
     TestExecutor expectedOps(changeGpsPower, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     state.setUsbPower(true);
 
@@ -128,7 +131,7 @@ void test_gps_power_while_power(void) {
 
   {
     TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     state.setUsbPower(false);
 
@@ -145,8 +148,9 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
 
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
-  AppState state(&clock, &expectedOps);
-  state.begin();
+  AppState state;
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -156,13 +160,13 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
 
   {
     TestExecutor expectedOps(changeSleep, NULL); // Just goes to sleep, does not attempt multiple joins
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     for (uint32_t s = 1; s<60; s += 1) {
       clock.advanceSeconds(1);
-      state.loop();
+      respire.loop();
       if (s==2) {
-        state.complete(ModeAttemptJoin);
+        respire.complete(ModeAttemptJoin);
       }
     }
 
@@ -176,8 +180,9 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
 void test_gps_power_and_send_after_low_power_successful_join(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
-  AppState state(&clock, &expectedOps);
-  state.begin();
+  AppState state;
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -186,11 +191,11 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 
   {
     TestExecutor expectedOps(changeGpsPower, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     {
-      StateTransaction transaction(state);
-      state.complete(ModeAttemptJoin, [](AppState &state){
+      StateTransaction<AppState> transaction(respire);
+      respire.complete(ModeAttemptJoin, [](AppState &state){
         state.setJoined(true);
       });
     }
@@ -205,11 +210,11 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 
   {
     TestExecutor expectedOps(changeGpsPower, readGpsLocation, sendLocationAck, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     state.setGpsFix(true);
 
-    state.complete(ModeReadGps, [](AppState &state){
+    respire.complete(ModeReadGps, [](AppState &state){
       state.setGpsLocation(true);
     });
 
@@ -224,9 +229,9 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 
   {
     TestExecutor expectedOps(changeSleep, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
-    state.complete(ModeSendAck);
+    respire.complete(ModeSendAck);
 
     TEST_ASSERT(state.getJoined());
     TEST_ASSERT_FALSE(state.getGpsPower());
@@ -241,10 +246,11 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 void test_5m_limit_on_low_power_gps_search(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
-  AppState state(&clock, &expectedOps);
-  state.begin();
+  AppState state;
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
-  state.complete(ModeAttemptJoin, [](AppState &state){
+  respire.complete(ModeAttemptJoin, [](AppState &state){
     state.setJoined(true);
   });
 
@@ -257,15 +263,15 @@ void test_5m_limit_on_low_power_gps_search(void) {
 
   {
     TestExecutor expectedOps(changeGpsPower, changeSleep, NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     clock.advanceSeconds(60);
-    state.loop();
+    respire.loop();
     TEST_ASSERT(ModeLowPowerGpsSearch.isActive(state));
     TEST_ASSERT_FALSE(ModeSleep.isActive(state));
 
     clock.advanceSeconds(4 * 60);
-    state.loop();
+    respire.loop();
     TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
     TEST_ASSERT(ModeSleep.isActive(state));
 
@@ -273,16 +279,16 @@ void test_5m_limit_on_low_power_gps_search(void) {
   }
 }
 
-void startedJoinAfter(const char *context, AppState &state, TestClock &clock, uint16_t seconds, ListenerFn expected, ...) {
+void startedJoinAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, ListenerFn expected, ...) {
   // Starting fresh and we attempt a send.
   va_list args;
   va_start(args, expected);
   TestExecutor expectedOps(expected, args);
   va_end(args);
-  state.setExecutor(&expectedOps);
+  respire.setExecutor(&expectedOps);
 
   clock.advanceSeconds(seconds);
-  state.loop();
+  respire.loop();
 
   TEST_ASSERT_MESSAGE(ModePeriodicJoin.isActive(state), context);
   TEST_ASSERT_FALSE_MESSAGE(ModeSend.isActive(state), context);
@@ -290,9 +296,9 @@ void startedJoinAfter(const char *context, AppState &state, TestClock &clock, ui
   TEST_ASSERT_FALSE_MESSAGE(ModeSleep.isActive(state), context);
 
   if (ModeAttemptJoin.isActive(state)) {
-    state.complete(ModeAttemptJoin);
+    respire.complete(ModeAttemptJoin);
   }
-  state.loop();
+  respire.loop();
 
   TEST_ASSERT_MESSAGE(ModePeriodicJoin.isActive(state), context);
   TEST_ASSERT_FALSE_MESSAGE(ModeSend.isActive(state), context);
@@ -304,12 +310,13 @@ void startedJoinAfter(const char *context, AppState &state, TestClock &clock, ui
 void test_join_every_5_min(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
-  AppState state(&clock, &expectedOps);
-  state.begin();
+  AppState state;
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
   // Setup our state...
   state.setUsbPower(true);
-  state.complete(ModeAttemptJoin);
+  respire.complete(ModeAttemptJoin);
 
   TEST_ASSERT(state.getUsbPower());
   TEST_ASSERT_FALSE(state.getJoined());
@@ -319,15 +326,15 @@ void test_join_every_5_min(void) {
   TEST_ASSERT(ModePeriodicJoin.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
-  startedJoinAfter("[first pass]", state, clock, 1, NULL);
+  startedJoinAfter(respire, "[first pass]", state, clock, 1, NULL);
 
   {
     // Some time passes and we stay in same state and nothing happens.
     TestExecutor expectedOps(NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     clock.advanceSeconds(4 * 60); // 4 minutes here
-    state.loop();
+    respire.loop();
 
     TEST_ASSERT(ModePeriodicJoin.isActive(state));
     TEST_ASSERT_FALSE(ModeSend.isActive(state));
@@ -337,19 +344,19 @@ void test_join_every_5_min(void) {
   }
 
   // Full period passes and we start another send.
-  startedJoinAfter("[second pass]", state, clock, 1 * 60 /* 1 min more, for total of 5 minutes */, attemptJoin, NULL);
+  startedJoinAfter(respire, "[second pass]", state, clock, 1 * 60 /* 1 min more, for total of 5 minutes */, attemptJoin, NULL);
 }
 
-void startedSendAfter(const char *context, AppState &state, TestClock &clock, uint16_t seconds, ListenerFn expected, ...) {
+void startedSendAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, ListenerFn expected, ...) {
   // Starting fresh and we attempt a send.
   va_list args;
   va_start(args, expected);
   TestExecutor expectedOps(expected, args);
   va_end(args);
-  state.setExecutor(&expectedOps);
+  respire.setExecutor(&expectedOps);
 
   clock.advanceSeconds(seconds);
-  state.loop();
+  respire.loop();
 
   TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
   TEST_ASSERT_MESSAGE(ModeSend.isActive(state), context);
@@ -357,12 +364,12 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
   TEST_ASSERT_FALSE_MESSAGE(ModeSleep.isActive(state), context);
 
   if (ModeSendAck.isActive(state)) {
-    state.complete(ModeSendAck);
+    respire.complete(ModeSendAck);
   }
   else {
-    state.complete(ModeSendNoAck);
+    respire.complete(ModeSendNoAck);
   }
-  state.loop();
+  respire.loop();
 
   TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
   TEST_ASSERT_FALSE_MESSAGE(ModeSend.isActive(state), context);
@@ -374,24 +381,24 @@ void startedSendAfter(const char *context, AppState &state, TestClock &clock, ui
 void test_send_every_10_min(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, sendLocationAck, NULL);
-  AppState state(&clock, &expectedOps);
-  state.begin();
+  AppState state;
+  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  respire.begin();
 
   // Setup our state...
   {
-    StateTransaction t(state);
+    StateTransaction<AppState> t(respire);
     state.setUsbPower(true);
-    state.complete(ModeAttemptJoin, [](AppState &state){
+    respire.complete(ModeAttemptJoin, [](AppState &state){
       state.setJoined(true);
     });
     state.setGpsFix(true);
   }
 
-
   {
-    StateTransaction t(state);
+    StateTransaction<AppState> t(respire);
     Log.Debug("\nCompleting ModeReadGps\n");
-    state.complete(ModeReadGps, [](AppState &state){
+    respire.complete(ModeReadGps, [](AppState &state){
       Log.Debug("\nSetting GPS location\n");
       state.setGpsLocation(true);
     });
@@ -405,15 +412,15 @@ void test_send_every_10_min(void) {
   TEST_ASSERT_FALSE(ModeLowPowerJoin.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
-  startedSendAfter("[first pass]", state, clock, 1, NULL);
+  startedSendAfter(respire, "[first pass]", state, clock, 1, NULL);
 
   {
     // Some time passes and we stay in same state and nothing happens.
     TestExecutor expectedOps(NULL);
-    state.setExecutor(&expectedOps);
+    respire.setExecutor(&expectedOps);
 
     clock.advanceSeconds(5 * 60); // 5 minutes here
-    state.loop();
+    respire.loop();
 
     TEST_ASSERT(ModePeriodicSend.isActive(state));
     TEST_ASSERT_FALSE(ModeSend.isActive(state));
@@ -423,7 +430,7 @@ void test_send_every_10_min(void) {
   }
 
   // Full period passes and we start another send.
-  startedSendAfter("[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, NULL);
+  startedSendAfter(respire, "[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, NULL);
 }
 
 int main(int argc, char **argv) {

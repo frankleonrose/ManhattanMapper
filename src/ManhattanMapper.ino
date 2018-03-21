@@ -51,7 +51,10 @@
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #endif
 
+Clock gClock;
+Executor gExecutor;
 AppState gState;
+RespireContext<AppState> gRespire(gState, ModeMain, &gClock, &gExecutor);
 
 Timer timer;
 Timer gpsTimer;
@@ -113,7 +116,7 @@ void onEvent(void *ctx, uint32_t event) {
             break;
         case EV_JOINED:
             Log.Debug(F("EV_JOINED" CR));
-            gState.complete(ModeAttemptJoin, [](AppState &state){
+            gRespire.complete(ModeAttemptJoin, [](AppState &state){
               state.setJoined(true);
             });
             break;
@@ -298,10 +301,10 @@ void setup() {
     gpsSetup();
 
     Log.Debug(F("Setup Respire" CR));
-    gState.init();
+    gRespire.init();
     gState.setUsbPower(true);
     gState.setGpsFix(true);
-    gState.begin();
+    gRespire.begin();
     gState.dump();
 
     Log.Debug(F("Setup complete" CR));
@@ -315,7 +318,7 @@ void loop() {
   timer.update();
   gpsTimer.update();
 
-  gState.loop();
+  gRespire.loop();
 }
 
 void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
@@ -339,12 +342,12 @@ void readGpsLocation(const AppState &state, const AppState &oldState) {
   Log.Debug("Reading GPS location: %d", state.getGpsPower());
   gpsRead([](const Adafruit_GPS &gps) {
     Log.Debug("Successfully read GPS\n");
-    gState.complete(ModeReadGps, [](AppState &state){
+    gRespire.complete(ModeReadGps, [](AppState &state){
       state.setGpsLocation(true);
     });
   }, []() {
     Log.Error("Failed to read GPS\n");
-    gState.complete(ModeReadGps);
+    gRespire.complete(ModeReadGps);
   });
 }
 
@@ -362,7 +365,7 @@ void changeSleep(const AppState &state, const AppState &oldState) {
 void sendLocation(const AppState &state, const AppState &oldState) {
   // Send location
   Log.Debug("Sending current location...\n");
-  gState.complete(ModeSendNoAck, [](AppState &state){
+  gRespire.complete(ModeSendNoAck, [](AppState &state){
     state.setGpsLocation(false);
   });
 }
@@ -370,7 +373,7 @@ void sendLocation(const AppState &state, const AppState &oldState) {
 void sendLocationAck(const AppState &state, const AppState &oldState) {
   // Send location
   Log.Debug("Sending current location with ACK...\n");
-  gState.complete(ModeSendAck, [](AppState &state){
+  gRespire.complete(ModeSendAck, [](AppState &state){
     state.setGpsLocation(false);
   });
 }
