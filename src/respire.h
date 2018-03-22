@@ -35,7 +35,7 @@ typedef enum ActivationTag {
   ActivationSustaining, // Used by Periodic cells that aren't inspiring but neither are they removing support
   ActivationExpiring,
   ActivationInactive,
-  ActivationDefaultCell // Used to tell a child it is being activated as a default cell
+  ActivationIdleCell // Used to tell a child it is being activated as a idle cell
 } ActivationType;
 
 class Clock {
@@ -79,7 +79,7 @@ class Mode {
   const uint16_t _perTimes = 0;
   const TimeUnit _perUnit = TimeUnitNone;
 
-  Mode *_defaultMode = NULL;
+  Mode *_idleMode = NULL;
   std::vector<Mode*> _children;
   uint8_t _childActivationLimit = 0;
   uint8_t _childSimultaneousLimit = 0;
@@ -169,8 +169,8 @@ class Mode {
     _minGapDuration = gap;
     return *this;
   }
-  Mode &defaultMode(Mode *mode) {
-    _defaultMode = mode;
+  Mode &idleMode(Mode *mode) {
+    _idleMode = mode;
     return *this;
   }
 

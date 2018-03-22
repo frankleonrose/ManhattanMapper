@@ -209,10 +209,10 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
   }
   ActivationType childActivation = (limit==0) ? ActivationSustaining : myActivation;
 
-  bool skippedDefault = false;
+  bool skippedIdleCell = false;
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
     auto mode = *m;
-    if (_defaultMode!=mode || childActivation==ActivationSustaining) {
+    if (_idleMode!=mode || childActivation==ActivationSustaining) {
       bool oldActive = mode->isActive(state);
       bool active = mode->propagate(childActivation, state, oldState);
       barren &= !active;
@@ -225,50 +225,50 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
         if (limit==0) {
           // We've reached the limit of our inspiration. Proceed with just sustaining power.
           childActivation = ActivationSustaining;
-          if (skippedDefault) {
-            // Now that we're in sustaining mode, propagate to _defaultMode that we skipped.
+          if (skippedIdleCell) {
+            // Now that we're in sustaining mode, propagate to _idleMode that we skipped.
             bool active = mode->propagate(childActivation, state, oldState);
             barren &= !active;
-            skippedDefault = false;
+            skippedIdleCell = false;
           }
         }
       }
     }
     else {
-      skippedDefault |= _defaultMode==mode;
+      skippedIdleCell |= _idleMode==mode;
     }
   }
 
   if (!_children.empty() && remaining==0 && barren && !persistent(state)) {
     assert(limit==0); // If remaining is 0, limit must be, too.
-    assert(!skippedDefault); // If limit is 0, logic above will have propagated to default
+    assert(!skippedIdleCell); // If limit is 0, logic above will have propagated to idleCell
     assert(childActivation==ActivationSustaining);
     Log.Debug("Terminating for barren and no capacity to inspire children: %s\n", name());
     terminate(state);
   }
   else if (childActivation!=ActivationSustaining) {
-    if (_defaultMode!=NULL) {
-      assert(skippedDefault);
-      // We have default cell. Actively inspire it if barren or kill it if not barren.
+    if (_idleMode!=NULL) {
+      assert(skippedIdleCell);
+      // We have idle cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
         if (limit>0) {
-          Log.Debug("Activating default: %s\n", _defaultMode->name());
-          bool active = _defaultMode->propagate(ActivationDefaultCell, state, oldState);
+          Log.Debug("Activating idle: %s\n", _idleMode->name());
+          bool active = _idleMode->propagate(ActivationIdleCell, state, oldState);
           if (active) {
             ++modeState(state)._childInspirationCount;
           }
         }
       }
       else {
-        Log.Debug("Terminating default: %s\n", _defaultMode->name());
-        _defaultMode->propagate(ActivationInactive, state, oldState);
+        Log.Debug("Terminating idle: %s\n", _idleMode->name());
+        _idleMode->propagate(ActivationInactive, state, oldState);
       }
     }
-    else { // No default Mode
-      assert(!skippedDefault);
+    else { // No idle Mode
+      assert(!skippedIdleCell);
       if (barren) {
-        // Barren cells lose activation, unless we are explicitly kept active as defaultCell or persistent(because periodic or min duration)
-        if (parentActivation!=ActivationDefaultCell && !persistent(state)) {
+        // Barren cells lose activation, unless we are explicitly kept active as idleCell or persistent(because periodic or min duration)
+        if (parentActivation!=ActivationIdleCell && !persistent(state)) {
           Log.Debug("Terminating for barrenness: %s\n", name());
           terminate(state);
         }
@@ -314,7 +314,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
   else {
     // Not active. Should activate?
-    if (parentActivation==ActivationDefaultCell
+    if (parentActivation==ActivationIdleCell
         || (parentActivation==ActivationInspiring && requiredState(state))
         || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState))) {
       // Either parent activation or requiredState (or both) just transitioned to true.
@@ -330,7 +330,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
     return propagateActive(parentActivation, myActivation, state, oldState);
   }
   else {
-    // We don't care about barren & default processing if we're not active - they all get shut down
+    // We don't care about barren & idle processing if we're not active - they all get shut down
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       (*m)->propagate(myActivation, state, oldState);
     }

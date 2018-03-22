@@ -20,7 +20,7 @@ Mode ModeMain("Main", 1);
 
 int _static_initialization_ = []() -> int {
   ModeMain.addChild(&ModeSleep);
-  ModeMain.defaultMode(&ModeSleep);
+  ModeMain.idleMode(&ModeSleep);
   ModeMain.addChild(&ModeLowPowerJoin);
   ModeMain.addChild(&ModeLowPowerGpsSearch);
   ModeMain.addChild(&ModeLowPowerSend);
