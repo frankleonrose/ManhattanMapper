@@ -95,7 +95,7 @@ class AppState : public RespireState<AppState> {
     }
     AppState oldState(*this);
     _usbPower = value;
-    setDependent(oldState);
+    onUpdate(oldState);
   }
 
   bool hasGpsFix() const {
@@ -109,7 +109,7 @@ class AppState : public RespireState<AppState> {
     }
     AppState oldState(*this);
     _gpsFix = value;
-    setDependent(oldState);
+    onUpdate(oldState);
   }
 
   bool hasGpsLocation() const {
@@ -137,7 +137,7 @@ class AppState : public RespireState<AppState> {
     }
     AppState oldState(*this);
     _joined = value;
-    setDependent(oldState);
+    onUpdate(oldState);
   }
 
   bool getGpsPower() const {

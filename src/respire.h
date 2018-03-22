@@ -309,7 +309,7 @@ template <class TAppState> class RespireState : public RespireStateBase {
     _listener = listener;
   }
 
-  void setDependent(const AppState &oldState) {
+  void onUpdate(const AppState &oldState) {
     _listener(oldState);
   }
   virtual void onChange(const AppState &oldState, Executor *executor) = 0;
@@ -348,7 +348,7 @@ class RespireContext {
     _holdLevel(1)
   {
     _appState.setListener([this](const AppState &oldState) {
-      setDependent(oldState);
+      onUpdate(oldState);
     });
   }
 
@@ -381,7 +381,7 @@ class RespireContext {
 
     TAppState reference; // Initial rev to compare to
     // reference.dump();
-    setDependent(reference);
+    onUpdate(reference);
 
     _initialized = true;
   }
@@ -405,7 +405,7 @@ class RespireContext {
     }
     TAppState oldState(_appState);
     mode.modeState(_appState)._invocationActive = false;
-    setDependent(oldState);
+    onUpdate(oldState);
   }
 
   void cancel(Mode &mode) {
@@ -417,7 +417,7 @@ class RespireContext {
 
     mode.modeState(_appState)._invocationActive = false;
 
-    setDependent(oldState);
+    onUpdate(oldState);
   }
 
   void holdActions() {
@@ -428,7 +428,7 @@ class RespireContext {
     assert(0 < _holdLevel);
     --_holdLevel;
     if (_holdLevel==0) {
-      onChange(oldState);
+      performActions(oldState);
     }
   }
 
@@ -450,11 +450,11 @@ class RespireContext {
 
     if (checkTimeTriggers()) {
       TAppState oldState(_appState);
-      setDependent(oldState); // TODO: Just pass _appState. It's a const arg.
+      onUpdate(oldState); // TODO: Just pass _appState. It's a const arg.
     }
   }
 
-  void setDependent(const AppState &oldState) {
+  void onUpdate(const AppState &oldState) {
     _appState.newFrame(_clock->millis());
 
     // _joined = false; // isSet(deviceAddr) && isSet(appSessionKey) && isSet(networkSessionKey)
@@ -462,13 +462,13 @@ class RespireContext {
     _modeMain.propagate(ActivationActive, _appState, oldState);
 
     if (_holdLevel==0) {
-      onChange(oldState);
+      performActions(oldState);
     }
 
     _appState.dump();
   }
 
-  void onChange(const TAppState &oldState) {
+  void performActions(const TAppState &oldState) {
     _appState.onChange(oldState, _executor);
 
     for (auto m = _invokeModes.begin(); m!=_invokeModes.end(); ++m) {
