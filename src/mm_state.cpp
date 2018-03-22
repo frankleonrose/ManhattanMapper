@@ -48,8 +48,11 @@ int _static_initialization_ = []() -> int {
   ModeLowPowerGpsSearch.requiredFunction([](const AppState &state) -> bool {
     return !state.getUsbPower() && state.getJoined() && !state.hasGpsFix();
   });
+  ModeReadAndSend.requiredFunction([](const AppState &state) -> bool {
+    return state.getJoined();
+  });
   ModeReadGps.requiredFunction([](const AppState &state) -> bool {
-    return state.getJoined() && state.hasGpsFix();
+    return state.hasGpsFix();
   });
   ModeLowPowerSend.requiredFunction([](const AppState &state) -> bool {
     return !state.getUsbPower() && state.getJoined() && state.hasGpsFix();
@@ -63,7 +66,7 @@ int _static_initialization_ = []() -> int {
   });
 
   ModeSend.requiredFunction([](const AppState &state) -> bool {
-    return state.getJoined() && state.hasGpsLocation();
+    return state.hasRecentGpsLocation();
   });
 
   return 0;
