@@ -34,6 +34,7 @@
 #include <SPI.h>
 #include <SD.h>
 
+#include <Adafruit_GPS.h>
 #include <Arduino_LoRaWAN_ttn.h>
 #include <Logging.h>
 #include <ParameterStore.h>
@@ -342,8 +343,8 @@ void readGpsLocation(const AppState &state, const AppState &oldState) {
   Log.Debug("Reading GPS location: %d", state.getGpsPower());
   gpsRead([](const Adafruit_GPS &gps) {
     Log.Debug("Successfully read GPS\n");
-    gRespire.complete(ModeReadGps, [](AppState &state){
-      state.setGpsLocation(true);
+    gRespire.complete(ModeReadGps, [&gps](AppState &state){
+      state.setGpsLocation(gps.latitudeDegrees, gps.longitudeDegrees, gps.altitude, gps.HDOP);
     });
   }, []() {
     Log.Error("Failed to read GPS\n");
@@ -365,17 +366,13 @@ void changeSleep(const AppState &state, const AppState &oldState) {
 void sendLocation(const AppState &state, const AppState &oldState) {
   // Send location
   Log.Debug("Sending current location...\n");
-  gRespire.complete(ModeSendNoAck, [](AppState &state){
-    state.setGpsLocation(false);
-  });
+  gRespire.complete(ModeSendNoAck);
 }
 
 void sendLocationAck(const AppState &state, const AppState &oldState) {
   // Send location
   Log.Debug("Sending current location with ACK...\n");
-  gRespire.complete(ModeSendAck, [](AppState &state){
-    state.setGpsLocation(false);
-  });
+  gRespire.complete(ModeSendAck);
 }
 
 #endif

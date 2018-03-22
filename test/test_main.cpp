@@ -193,12 +193,9 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
     TestExecutor expectedOps(changeGpsPower, NULL);
     respire.setExecutor(&expectedOps);
 
-    {
-      StateTransaction<AppState> transaction(respire);
-      respire.complete(ModeAttemptJoin, [](AppState &state){
-        state.setJoined(true);
-      });
-    }
+    respire.complete(ModeAttemptJoin, [](AppState &state){
+      state.setJoined(true);
+    });
 
     TEST_ASSERT(state.getJoined());
     TEST_ASSERT(state.getGpsPower());
@@ -215,7 +212,7 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
     state.setGpsFix(true);
 
     respire.complete(ModeReadGps, [](AppState &state){
-      state.setGpsLocation(true);
+      state.setGpsLocation(45, 45, 45, 1.5);
     });
 
     TEST_ASSERT(state.getJoined());
@@ -358,6 +355,11 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
   clock.advanceSeconds(seconds);
   respire.loop();
 
+  TEST_ASSERT_MESSAGE(ModeReadGps.isActive(state), context);
+  respire.complete(ModeReadGps, [](AppState &state){
+    state.setGpsLocation(45, 45, 45, 1.5);
+  });
+
   TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
   TEST_ASSERT_MESSAGE(ModeSend.isActive(state), context);
   TEST_ASSERT_MESSAGE(ModeSendAck.isActive(state) ^ ModeSendNoAck.isActive(state), context);
@@ -380,9 +382,10 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
 
 void test_send_every_10_min(void) {
   TestClock clock;
-  TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, sendLocationAck, NULL);
+  TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, NULL);
   AppState state;
   RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+
   respire.begin();
 
   // Setup our state...
@@ -395,15 +398,6 @@ void test_send_every_10_min(void) {
     state.setGpsFix(true);
   }
 
-  {
-    StateTransaction<AppState> t(respire);
-    Log.Debug("\nCompleting ModeReadGps\n");
-    respire.complete(ModeReadGps, [](AppState &state){
-      Log.Debug("\nSetting GPS location\n");
-      state.setGpsLocation(true);
-    });
-  }
-
   TEST_ASSERT(state.getUsbPower());
   TEST_ASSERT(state.getJoined());
   TEST_ASSERT(state.getGpsPower());
@@ -412,7 +406,7 @@ void test_send_every_10_min(void) {
   TEST_ASSERT_FALSE(ModeLowPowerJoin.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
-  startedSendAfter(respire, "[first pass]", state, clock, 1, NULL);
+  startedSendAfter(respire, "[first pass]", state, clock, 1, sendLocationAck, NULL);
 
   {
     // Some time passes and we stay in same state and nothing happens.

@@ -34,7 +34,6 @@ extern void changeSleep(const AppState &state, const AppState &oldState);
 extern void sendLocation(const AppState &state, const AppState &oldState);
 extern void sendLocationAck(const AppState &state, const AppState &oldState);
 
-
 // Modes
 extern Mode ModeMain;
 extern Mode ModeSleep;
@@ -50,11 +49,18 @@ extern Mode ModeSend;
 extern Mode ModeSendNoAck;
 extern Mode ModeSendAck;
 
+#define SAMPLE_VALID_FOR_MS 2000
+
 class AppState : public RespireState<AppState> {
   // External state
   bool _usbPower;
   bool _gpsFix;
-  bool _gpsLocation;
+
+  float _latitude;
+  float _longitude;
+  float _altitude;
+  float _HDOP;
+  uint32_t _gpsSampleExpiry;
 
   // Dependent state - no setters
   bool _joined;
@@ -69,18 +75,22 @@ class AppState : public RespireState<AppState> {
   : RespireState(otherState),
     _usbPower(otherState._usbPower),
     _gpsFix(otherState._gpsFix),
-    _gpsLocation(otherState._gpsLocation),
     _joined(otherState._joined),
-    _gpsPowerOut(otherState._gpsPowerOut)
+    _gpsPowerOut(otherState._gpsPowerOut),
+    _latitude(otherState._latitude),
+    _longitude(otherState._longitude),
+    _altitude(otherState._altitude),
+    _HDOP(otherState._HDOP),
+    _gpsSampleExpiry(otherState._gpsSampleExpiry)
   {}
 
   void reset() {
     RespireState<AppState>::reset();
     _usbPower = false;
     _gpsFix = false;
-    _gpsLocation = false;
     _joined = false;
     _gpsPowerOut = false;
+    _gpsSampleExpiry = 0;
   }
 
   // USB power
@@ -112,18 +122,19 @@ class AppState : public RespireState<AppState> {
     onUpdate(oldState);
   }
 
-  bool hasGpsLocation() const {
-    return _gpsLocation;
+  void setGpsLocation(float latitude, float longitude, float altitude, float HDOP) {
+    Log.Debug("setGpsLocation -----------------------------\n");
+    AppState oldState(*this);
+    _latitude = latitude;
+    _longitude = longitude;
+    _altitude = altitude;
+    _HDOP = HDOP;
+    _gpsSampleExpiry = millis() + SAMPLE_VALID_FOR_MS;
+    onUpdate(oldState);
   }
 
-  void setGpsLocation(bool value) {
-    if (_gpsLocation==value) {
-      // Short circuit no change
-      return;
-    }
-    AppState oldState(*this);
-    _gpsLocation = value;
-    setDependent(oldState);
+  bool hasGpsLocation() const {
+    return _gpsSampleExpiry!=0 && (millis() < _gpsSampleExpiry);
   }
 
   bool getJoined() const {
@@ -152,7 +163,9 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- Joined [Input]:     %T\n", _joined);
     Log.Debug("- GPS Power [Output]: %T\n", _gpsPowerOut);
     Log.Debug("- GPS Fix [Input]:     %T\n", _gpsFix);
-    Log.Debug("- GPS Location [Input]: %T\n", _gpsLocation);
+    Log.Debug("- GPS Location [Input]: %T\n", hasGpsLocation());
+    Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
+    Log.Debug("- GPS Latitude, Longitude, Altitude, HDOP [Input]: %f, %f, %f, %f\n", _latitude, _longitude, _altitude, _HDOP);
     ModeMain.dump(*this);
     ModeSleep.dump(*this);
     ModeLowPowerJoin.dump(*this);

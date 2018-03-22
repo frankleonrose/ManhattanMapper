@@ -394,7 +394,7 @@ class RespireContext {
     resumeActions(reference);
   }
 
-  void complete(Mode &mode, void (*updateFn)(TAppState &state) = NULL) {
+  void complete(Mode &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
     // Log.Debug("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
     if (!mode.modeState(_appState)._invocationActive) {
       return;
@@ -408,15 +408,17 @@ class RespireContext {
     onUpdate(oldState);
   }
 
-  void cancel(Mode &mode) {
+  void cancel(Mode &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
     // Log.Debug("----------- cancelled: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
     if (!mode.modeState(_appState)._invocationActive) {
       return;
     }
+    StateTransaction<TAppState> t(*this);
+    if (updateFn!=NULL) {
+      updateFn(_appState);
+    }
     TAppState oldState(_appState);
-
     mode.modeState(_appState)._invocationActive = false;
-
     onUpdate(oldState);
   }
 
