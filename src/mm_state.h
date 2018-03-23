@@ -16,6 +16,9 @@
           to being members of AppState.)
  */
 
+#ifndef MM_STATE_H
+#define MM_STATE_H
+
 #include <Arduino.h>
 #include <limits.h>
 #include <cstdio>
@@ -27,13 +30,13 @@
 #include "respire.h"
 #include <Logging.h>
 
-extern void changeGpsPower(const AppState &state, const AppState &oldState);
-extern void readGpsLocation(const AppState &state, const AppState &oldState);
-extern void attemptJoin(const AppState &state, const AppState &oldState);
-extern void changeSleep(const AppState &state, const AppState &oldState);
-extern void sendLocation(const AppState &state, const AppState &oldState);
-extern void sendLocationAck(const AppState &state, const AppState &oldState);
-extern void writeLocation(const AppState &state, const AppState &oldState);
+extern void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 
 // Modes
 extern Mode ModeMain;
@@ -65,8 +68,8 @@ class AppState : public RespireState<AppState> {
   uint32_t _gpsSampleExpiry;
 
   // Dependent state - no setters
-  bool _joined;
-  bool _gpsPowerOut;
+  bool _joined = false;
+  bool _gpsPowerOut = false;
 
   public:
   AppState() {
@@ -181,3 +184,5 @@ class AppState : public RespireState<AppState> {
     }
   }
 };
+
+#endif

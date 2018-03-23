@@ -1,6 +1,14 @@
 #ifndef RESPIRE_H
 #define RESPIRE_H
 
+/*
+TODO
+- Send Invocation memento that includes start frame so that on completion we are sure to be talking about the right invocation.
+- When an invoke mode is terminated while running, it should notify the running function - maybe it can cancel.
+- Defend against millis rollover (6.x weeks). When millis count exceeds a week or two, reset all stored times by a basis and henceforth report (millis - basis).
+-
+*/
+
 #include <Arduino.h>
 #include <limits.h>
 #include <cstdio>
@@ -18,7 +26,7 @@ class AppState;
 class Mode;
 class RespireStateBase;
 
-typedef void (*ListenerFn)(const AppState &state, const AppState &oldState);
+typedef void (*ActionFn)(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 typedef bool (*StateModFn)(const AppState &state, const AppState &oldState);
 typedef bool (*StatePredicate)(const AppState &state);
 
@@ -48,21 +56,36 @@ class Clock {
   }
 };
 
+/**
+ * Executor gives us an opportunity to capture the execution of actions. Used for testing.
+ */
 class Executor {
   public:
-  virtual void exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *trigger);
+  virtual void exec(ActionFn action, const AppState &state, const AppState &oldState, Mode *trigger);
 };
 
+/**
+ * The ModeState struct holds the mutable state of a Mode.
+ *
+ * The idea is that there's a lot of static information about Modes. If the AppState object held all an
+ * app's Modes, copying it would be more time consuming and cumbersome.
+ *
+ * Instead, Modes exist outside of AppState but all ModeStates exists within it.
+ * ModeStates are each 20 bytes (as of 20180323) and copying can be accomplished with the equivalent of memcpy.
+ *
+ * Ideally we would use some sort of shared structure immutable data structure for states which would
+ * make copies even cheaper. For now, we have this and on modern mcu's it isn't terrible.
+ */
 typedef struct ModeStateTag {
   // Mode is active as of a particular history index
-  uint32_t _startIndex = 0;
+  uint32_t _startIndex = 0; // 0 means Mode is inactive
   uint32_t _startMillis = 0;
   uint32_t _endMillis = 0;
 
+  uint32_t _lastTriggerMillis = 0;
+
   bool _invocationActive = false;
   uint8_t _invocationCount = 0;
-
-  uint32_t _lastTriggerMillis = 0;
 
   uint8_t _childInspirationCount = 0;
 } ModeState;
@@ -90,7 +113,7 @@ class Mode {
     uint8_t _childSimultaneousLimit = 0;
 
     StateModFn _inspirationFn = NULL;
-    ListenerFn _invokeFunction = NULL;
+    ActionFn _invokeFunction = NULL;
     StatePredicate _requiredPred = NULL;
 
     friend Mode; // Access these private members without creating accessor functions.
@@ -153,7 +176,7 @@ class Mode {
       _inspirationFn = inspirationFn;
       return *this;
     }
-    Builder &invokeFn(ListenerFn invokeFunction) {
+    Builder &invokeFn(ActionFn invokeFunction) {
       _invokeFunction = invokeFunction;
       return *this;
     }
@@ -184,7 +207,7 @@ class Mode {
   const uint8_t _childSimultaneousLimit = 0;
 
   const StateModFn _inspirationFn = NULL;
-  const ListenerFn _invokeFunction = NULL;
+  const ActionFn _invokeFunction = NULL;
   const StatePredicate _requiredPred = NULL;
 
   uint8_t _countParents = 0;
@@ -227,7 +250,7 @@ class Mode {
     return _requiredPred(state);
   }
 
-  ListenerFn invokeFunction() const {
+  ActionFn invokeFunction() const {
     return _invokeFunction;
   }
 
@@ -459,19 +482,8 @@ class RespireContext {
     mode.modeState(_appState)._invocationActive = false;
     onUpdate(oldState);
   }
-
-  void cancel(Mode &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
-    // Log.Debug("----------- cancelled: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
-    if (!mode.modeState(_appState)._invocationActive) {
-      return;
-    }
-    StateTransaction<TAppState> t(*this);
-    if (updateFn!=NULL) {
-      updateFn(_appState);
-    }
-    TAppState oldState(_appState);
-    mode.modeState(_appState)._invocationActive = false;
-    onUpdate(oldState);
+  void complete(Mode *mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
+    complete(*mode, updateFn);
   }
 
   void holdActions() {

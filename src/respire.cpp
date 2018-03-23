@@ -353,7 +353,6 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
 }
 
-void Executor::exec(ListenerFn listener, const AppState &state, const AppState &oldState, Mode *mode) {
-  // TODO Mode needs to be notified of completion
-  listener(state, oldState);
+void Executor::exec(ActionFn listener, const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  listener(state, oldState, triggeringMode);
 }

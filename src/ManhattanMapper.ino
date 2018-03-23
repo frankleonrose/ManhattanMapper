@@ -333,46 +333,61 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
 
 #ifndef MOCK_ACTIONS
 
-void changeGpsPower(const AppState &state, const AppState &oldState) {
   // Reify GpsPower value
+void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Setting GPS power: %d", state.getGpsPower());
   //digitalWrite(GPS_POWER_PIN, state.getGpsPower());
 }
 
-void readGpsLocation(const AppState &state, const AppState &oldState) {
+void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Reading GPS location: %d", state.getGpsPower());
   gpsRead([](const Adafruit_GPS &gps) {
     Log.Debug("Successfully read GPS\n");
     gRespire.complete(ModeReadGps, [&gps](AppState &state){
       state.setGpsLocation(gps.latitudeDegrees, gps.longitudeDegrees, gps.altitude, gps.HDOP);
     });
-  }, []() {
+  }, [triggeringMode]() {
     Log.Error("Failed to read GPS\n");
-    gRespire.complete(ModeReadGps);
+    gRespire.complete(triggeringMode);
   });
 }
 
-void attemptJoin(const AppState &state, const AppState &oldState) {
+void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
   Log.Debug("Attempting join...");
   node.join();
 }
 
-void changeSleep(const AppState &state, const AppState &oldState) {
+void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Enter or exit Sleep state
   Log.Debug("Entering sleep mode...\n");
 }
 
-void sendLocation(const AppState &state, const AppState &oldState) {
+void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  gRespire.complete(triggeringMode);
+}
+void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Send location
   Log.Debug("Sending current location...\n");
-  gRespire.complete(ModeSendNoAck);
+  if (!do_send(state, false)) {
+
+  }
+  else {
+
+  }
+  gRespire.complete(triggeringMode);
 }
 
-void sendLocationAck(const AppState &state, const AppState &oldState) {
+void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Send location
   Log.Debug("Sending current location with ACK...\n");
-  gRespire.complete(ModeSendAck);
+  if (!do_send(state, true)) {
+
+  }
+  else {
+
+  }
+  gRespire.complete(triggeringMode);
 }
 
 #endif
