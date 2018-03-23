@@ -212,8 +212,9 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
 
     state.setGpsFix(true);
 
-      state.setGpsLocation(45, 45, 45, 1.5);
     respire.complete(ModeReadGps, [](AppState &state) {
+      GpsSample sample(45, 45, 45, 1.5, 2018, 03, 20, 12, 00, 00, 0000);
+      state.setGpsLocation(sample);
     });
 
     TEST_ASSERT(state.getJoined());
@@ -359,7 +360,8 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
 
   TEST_ASSERT_MESSAGE(ModeReadGps.isActive(state), context);
   respire.complete(ModeReadGps, [](AppState &state){
-    state.setGpsLocation(45, 45, 45, 1.5);
+      GpsSample sample(45, 45, 45, 1.5, 2018, 03, 20, 12, 00, 00, 0000);
+      state.setGpsLocation(sample);
   });
 
   TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);

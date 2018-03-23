@@ -57,7 +57,6 @@ Executor gExecutor;
 AppState gState;
 RespireContext<AppState> gRespire(gState, ModeMain, &gClock, &gExecutor);
 
-Timer timer;
 Timer gpsTimer;
 
 // Lorawan Device ID, App ID, and App Key
@@ -65,10 +64,7 @@ const char *devEui = "006158A2D06A7A4E";
 const char *appEui = "70B3D57EF0001C38";
 const char *appKey = "4681950BEFE343C33BD9BB81CA68A89E";
 
-uint8_t readings[10];
-uint16_t head = 0;
-
-#define PACKET_FORMAT_ID 0xFA
+#define PACKET_FORMAT_ID 0x3
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
@@ -77,7 +73,7 @@ const unsigned TX_INTERVAL_SEC = 20; // 3600 // Every hour
 static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 
 // Pin mapping
-#define GPS_POWER_PIN 50
+#define SD_CARD_CS 10
 #define LORA_CS 8
 const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
 // Feather LoRa wiring (with IO1 <--> GPIO#6)
@@ -96,6 +92,18 @@ LoraStack node(lorawan, pstore, TTN_FP_US915);
 void onEvent(void *ctx, uint32_t event) {
   if (event==EV_TXCOMPLETE) {
     Log.Debug(F("EV_TXCOMPLETE (includes waiting for RX windows)" CR));
+    if (LMIC.txrxFlags & TXRX_ACK) {
+      Log.Debug(F("Received ack" CR));
+      gRespire.complete(ModeSendAck, [](AppState &state) {
+        state.transmittedFrame(LMIC.seqnoUp);
+      });
+    }
+    else {
+      Log.Debug(F("Did not receive ack" CR));
+      gRespire.complete(ModeSendNoAck, [](AppState &state) {
+        state.transmittedFrame(LMIC.seqnoUp);
+      });
+    }
     digitalWrite(LED_BUILTIN, LOW);
   }
   else {
@@ -181,41 +189,53 @@ uint8_t readBatteryLevel() {
     return level;
 }
 
-void do_send() {
+uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
+  int32_t lat = _latitude * 46603;  // Expand +/-180 coordinate to fill 24bits
+  uint32_t ulat = lat < 0 ? (UINT32_MAX-(uint32_t)(-lat)+1) : (uint32_t)(lat);
+  ulat = htonl(ulat);
+  int32_t lon = _longitude * 93206; // Expand +/-90 coordinate to fill 24bits
+  uint32_t ulon = lon < 0 ? (UINT32_MAX-(uint32_t)(-lon)+1) : (uint32_t)(lon);
+  ulon = htonl(ulon);
+  int16_t alt = _altitude;
+  alt = htons(alt);
+  int16_t hdop = _HDOP * 1000;
+  hdop = htons(hdop);
+
+  memcpy(packet + 0, &ulat, 3); // 24 bit
+  memcpy(packet + 3, &ulon, 3); // 24 bit
+  memcpy(packet + 6,  &alt, 2);
+  memcpy(packet + 8, &hdop, 2);
+
+  return 10;
+}
+
+bool do_send(const AppState &state, const bool withAck) {
     // Check if there is not a current TX/RX job running
     // if (LMIC.opmode & OP_TXRXPEND) {
     //     Log.Debug(F("OP_TXRXPEND, not sending" CR));
     // }
     // else {
-    // Prepare upstream data transmission at the next possible time.
-    uint8_t packet[2 + sizeof(readings)];
 
-    ASSERT(head<sizeof(readings));
-    uint16_t remain = sizeof(readings) - head;
+    // Prepare upstream data transmission at the next possible time.
+    uint8_t packet[1 + 3 + 3 + 2 + 2 + 1];
     packet[0] = PACKET_FORMAT_ID;
-    memcpy(packet + 1, readings + head, remain);
-    memcpy(packet + 1 + remain, readings, sizeof(readings) - remain);
+    uint8_t bytes = state.gpsSample().writePacket(packet+1, sizeof(packet)-1);
+    assert(bytes+2==sizeof(packet));
     packet[sizeof(packet)-1] = readBatteryLevel();
 
-    Log.Debug(F("head %d, remain %d" CR), head, remain);
-    Log.Debug(F("Readings: %*m" CR), sizeof(readings), readings);
     Log.Debug(F("Writing packet: %*m" CR), sizeof(packet), packet);
 
     digitalWrite(LED_BUILTIN, HIGH);
 
-    // LMIC_setTxData2(1, packet, sizeof(packet), 0);
-    ttn_response_t ret = node.sendBytes(packet, sizeof(packet));
+    ttn_response_t ret = node.sendBytes(packet, sizeof(packet), '\001' /* port */, withAck);
     if (ret!=TTN_SUCCESSFUL_TRANSMISSION) {
       Log.Error(F("Failed to transmit: %d" CR), ret);
+      return false;
     }
     else {
       Log.Debug(F("Packet queued" CR));
+      return true;
     }
-    // Next TX is scheduled after TX_COMPLETE event.
-}
-
-void sendTemp() {
-  do_send();
 }
 
 void dumpGps() {
@@ -223,6 +243,8 @@ void dumpGps() {
 }
 
 void setup() {
+    //  attachInterrupt(A0, onA0Change, CHANGE);
+
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
@@ -233,6 +255,12 @@ void setup() {
       delay(1000);
     }
     Log.Debug(F("Starting" CR));
+
+    if (!SD.begin(SD_CARD_CS)) {
+      Log.Error("Card failed or not present\n");
+      while (1);
+    }
+    Log.Debug("SD card interface initialized.\n");
 
     Log.Debug("Writing default value to NSS: %d", LORA_CS);
     // digitalWrite(FRAM_CS, HIGH); // Default, unselected
@@ -293,9 +321,6 @@ void setup() {
     // Log.Debug(F("LMIC_setDrTxpow" CR));
     // LMIC_setDrTxpow(DR_SF7, 14);
 
-    memset(readings, 0xFF, sizeof(readings));
-
-    // timer.every(TX_INTERVAL_SEC * 1000, sendTemp);
     gpsTimer.every(60 * 1000, dumpGps);
 
     Log.Debug(F("Setup GPS" CR));
@@ -316,8 +341,9 @@ void loop() {
   lorawan.loop();
   gpsLoop(Serial);
 
-  timer.update();
   gpsTimer.update();
+
+  gState.setGpsFix(gpsHasFix()); // Quick if value didn't change
 
   gRespire.loop();
 }
@@ -333,18 +359,18 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
 
 #ifndef MOCK_ACTIONS
 
-  // Reify GpsPower value
 void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  // Only called when changed, so just apply value.
   Log.Debug("Setting GPS power: %d", state.getGpsPower());
-  //digitalWrite(GPS_POWER_PIN, state.getGpsPower());
+  gpsEnable(state.getGpsPower());
 }
 
 void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Reading GPS location: %d", state.getGpsPower());
-  gpsRead([](const Adafruit_GPS &gps) {
+  gpsRead([triggeringMode](const GpsSample &gpsSample) {
     Log.Debug("Successfully read GPS\n");
-    gRespire.complete(ModeReadGps, [&gps](AppState &state){
-      state.setGpsLocation(gps.latitudeDegrees, gps.longitudeDegrees, gps.altitude, gps.HDOP);
+    gRespire.complete(triggeringMode, [&gpsSample](AppState &state){
+      state.setGpsLocation(gpsSample);
     });
   }, [triggeringMode]() {
     Log.Error("Failed to read GPS\n");
@@ -366,6 +392,7 @@ void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeri
 void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   gRespire.complete(triggeringMode);
 }
+
 void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Send location
   Log.Debug("Sending current location...\n");

@@ -5,15 +5,32 @@
 #include <Adafruit_GPS.h>
 #include <Arduino.h>
 #include <Logging.h>
+#include <Adafruit_ZeroTimer.h>
+#include "gps.h"
+
+#define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
+
+#define GPS_FIX_PIN 12
+#define GPS_ENABLE_PIN 11
 
 HardwareSerial &gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
-void (*gReadSuccess)(const Adafruit_GPS &gps) = NULL;
-void (*gReadFailure)() = NULL;
+std::function< void(const GpsSample &gpsSample) > gReadSuccess;
+std::function< void(void) > gReadFailure;
 
 // Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
 // Set to 'true' if you want to debug and listen to the raw GPS sentences.
 #define GPSECHO false
+
+static volatile bool gpsHasFixStatus;
+bool gpsHasFix() {
+  return gpsHasFixStatus;
+}
+
+void gpsEnable(bool enable) {
+  Log.Debug("Setting GPS enable: %T", enable);
+  digitalWrite(GPS_ENABLE_PIN, !enable);
+}
 
 void gpsSetup()
 {
@@ -39,6 +56,12 @@ void gpsSetup()
   delay(1000);
   // Ask for firmware version
   GPS.sendCommand(PMTK_Q_RELEASE);
+
+
+  pinMode(GPS_ENABLE_PIN, OUTPUT);
+  digitalWrite(GPS_ENABLE_PIN, HIGH); // Disabled initially
+
+  gpsHasFixStatus = false;
 }
 
 void gpsLoop(Print &printer)
@@ -50,13 +73,14 @@ void gpsLoop(Print &printer)
 
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
-    if (gReadSuccess!=NULL) {
+    if (gReadSuccess) {
       Log.Debug("GPS string: %s\n", GPS.lastNMEA());
       // We are interested in a new location
       if (GPS.parse(GPS.lastNMEA())) {   // this also sets the newNMEAreceived() flag to false
-        gReadSuccess(GPS);
+        GpsSample sample(GPS.latitudeDegrees, GPS.longitudeDegrees, GPS.altitude, GPS.HDOP, 2000 + GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
+        gReadSuccess(sample);
       }
-      else {
+      else if (gReadFailure) {
         gReadFailure();
       }
       gReadSuccess = NULL;
@@ -65,7 +89,7 @@ void gpsLoop(Print &printer)
   }
 }
 
-void gpsRead(void (*success)(const Adafruit_GPS &gps), void (*failure)()) {
+void gpsRead(std::function< void(const GpsSample &gpsSample) > success, std::function< void() > failure) {
   gReadSuccess = success;
   gReadFailure = failure;
   GPS.lastNMEA(); // Reset last reading

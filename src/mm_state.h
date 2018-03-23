@@ -56,23 +56,55 @@ extern Mode ModeLogGps;
 
 #define SAMPLE_VALID_FOR_MS 2000
 
+typedef struct GpsSample {
+  float _latitude = 0.0;
+  float _longitude = 0.0;
+  float _altitude = 0.0;
+  float _HDOP = 0.0;
+  uint16_t _year = 0;
+  uint8_t _month = 0, _day = 0, _hour = 0, _minute = 0, _seconds = 0;
+  uint16_t _millis = 0;
+
+  GpsSample() {};
+
+  GpsSample(float latitude, float longitude, float altitude, float HDOP, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t seconds, uint16_t millis)
+  : _latitude(latitude),
+    _longitude(longitude),
+    _altitude(altitude),
+    _HDOP(HDOP),
+    _year(year),
+    _month(month),
+    _day(day),
+    _hour(hour),
+    _minute(minute),
+    _seconds(seconds),
+    _millis(millis)
+  {}
+
+  uint8_t writePacket(uint8_t *packet, uint8_t packetSize) const;
+
+  void dump() const {
+    Log.Debug("- GPS Latitude, Longitude, Altitude, HDOP [Input]: %f, %f, %f, %f\n", _latitude, _longitude, _altitude, _HDOP);
+  }
+} GpsSample;
+
 class AppState : public RespireState<AppState> {
   // External state
   bool _usbPower;
   bool _gpsFix;
 
-  float _latitude;
-  float _longitude;
-  float _altitude;
-  float _HDOP;
+  GpsSample _gpsSample;
   uint32_t _gpsSampleExpiry;
+
+  uint32_t _ttnFrameCounter;
+  uint32_t _ttnLastSend;
 
   // Dependent state - no setters
   bool _joined = false;
   bool _gpsPowerOut = false;
 
   public:
-  AppState() {
+  AppState() : _gpsSample() {
     reset();
   }
 
@@ -80,13 +112,10 @@ class AppState : public RespireState<AppState> {
   : RespireState(otherState),
     _usbPower(otherState._usbPower),
     _gpsFix(otherState._gpsFix),
+    _gpsSample(otherState._gpsSample),
+    _gpsSampleExpiry(otherState._gpsSampleExpiry),
     _joined(otherState._joined),
-    _gpsPowerOut(otherState._gpsPowerOut),
-    _latitude(otherState._latitude),
-    _longitude(otherState._longitude),
-    _altitude(otherState._altitude),
-    _HDOP(otherState._HDOP),
-    _gpsSampleExpiry(otherState._gpsSampleExpiry)
+    _gpsPowerOut(otherState._gpsPowerOut)
   {}
 
   void reset() {
@@ -127,18 +156,19 @@ class AppState : public RespireState<AppState> {
     onUpdate(oldState);
   }
 
-  void setGpsLocation(float latitude, float longitude, float altitude, float HDOP) {
+  void setGpsLocation(GpsSample gpsSample) {
     Log.Debug("setGpsLocation -----------------------------\n");
     AppState oldState(*this);
-    _latitude = latitude;
-    _longitude = longitude;
-    _altitude = altitude;
-    _HDOP = HDOP;
+    _gpsSample = gpsSample;
     _gpsSampleExpiry = millis() + SAMPLE_VALID_FOR_MS;
     onUpdate(oldState);
   }
 
-  bool hasGpsLocation() const {
+  const GpsSample &gpsSample() const {
+    return _gpsSample;
+  }
+
+  bool hasRecentGpsLocation() const {
     return _gpsSampleExpiry!=0 && (millis() < _gpsSampleExpiry);
   }
 
@@ -160,6 +190,11 @@ class AppState : public RespireState<AppState> {
     return _gpsPowerOut;
   }
 
+  void transmittedFrame(const uint32_t frameCounter) {
+    _ttnFrameCounter = frameCounter;
+    _ttnLastSend = millis();
+  }
+
   void dump() const {
     Log.Debug("AppState: ----------------\n");
     Log.Debug("- Millis:             %u\n", (long unsigned)millis());
@@ -168,9 +203,11 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- Joined [Input]:     %T\n", _joined);
     Log.Debug("- GPS Power [Output]: %T\n", _gpsPowerOut);
     Log.Debug("- GPS Fix [Input]:     %T\n", _gpsFix);
-    Log.Debug("- GPS Location [Input]: %T\n", hasGpsLocation());
+    Log.Debug("- GPS Location [Input]: %T\n", hasRecentGpsLocation());
     Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
-    Log.Debug("- GPS Latitude, Longitude, Altitude, HDOP [Input]: %f, %f, %f, %f\n", _latitude, _longitude, _altitude, _HDOP);
+    Log.Debug("- TTN Frame Up [Input]: %u\n", _ttnFrameCounter);
+    Log.Debug("- TTN Last Send [Input]: %u\n", _ttnLastSend);
+    _gpsSample.dump();
     ModeMain.dump(*this);
     Log.Debug("AppState: ---------------- END\n");
   }
