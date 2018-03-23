@@ -1,3 +1,6 @@
+#ifndef RESPIRE_H
+#define RESPIRE_H
+
 #include <Arduino.h>
 #include <limits.h>
 #include <cstdio>
@@ -67,6 +70,98 @@ typedef struct ModeStateTag {
 #define STATE_INDEX_INITIAL 255
 
 class Mode {
+  public:
+
+  class Builder {
+    const char * const _name;
+    uint8_t _repeatLimit = 0;
+
+    uint32_t _minDuration = 0;
+    uint32_t _maxDuration = 0;
+    uint32_t _minGapDuration = 0;
+
+    uint16_t _perTimes = 0;
+    TimeUnit _perUnit = TimeUnitNone;
+
+    Mode *_idleMode = NULL;
+    std::vector<Mode*> _children;
+    uint8_t _childActivationLimit = 0;
+    uint8_t _childSimultaneousLimit = 0;
+
+    StateModFn _inspirationFn = NULL;
+    ListenerFn _invokeFunction = NULL;
+    StatePredicate _requiredPred = NULL;
+
+    friend Mode; // Access these private members without creating accessor functions.
+
+    public:
+
+    Builder(const char *name)
+    : _name(name) {
+    }
+
+    Builder &repeatLimit(uint8_t repeatLimit) {
+      _repeatLimit = repeatLimit;
+      return *this;
+    }
+    Builder &minDuration(uint32_t minDuration) {
+      _minDuration = minDuration;
+      return *this;
+    }
+    Builder &maxDuration(uint32_t maxDuration) {
+      _maxDuration = maxDuration;
+      return *this;
+    }
+    Builder &minGapDuration(uint32_t minGapDuration) {
+      _minGapDuration = minGapDuration;
+      return *this;
+    }
+    Builder &periodic(uint16_t times, TimeUnit perUnit) {
+      return perTimes(times).perUnit(perUnit);
+    }
+    Builder &perTimes(uint16_t perTimes) {
+      _perTimes = perTimes;
+      return *this;
+    }
+    Builder &perUnit(TimeUnit perUnit) {
+      _perUnit = perUnit;
+      return *this;
+    }
+    Builder &idleMode(Mode *idleMode) {
+      printf("idleMode: %p\n", idleMode);
+      _idleMode = idleMode;
+      return *this;
+    }
+    Builder &addChild(Mode *child) {
+      assert(child!=NULL);
+      printf("addChild: %p\n", child);
+      _children.push_back(child);
+      return *this;
+    }
+    Builder &childActivationLimit(uint8_t childActivationLimit) {
+      _childActivationLimit = childActivationLimit;
+      return *this;
+    }
+    Builder &childSimultaneousLimit(uint8_t childSimultaneousLimit) {
+      _childSimultaneousLimit = childSimultaneousLimit;
+      return *this;
+    }
+    Builder &inspirationFn(StateModFn inspirationFn) {
+      _inspirationFn = inspirationFn;
+      return *this;
+    }
+    Builder &invokeFn(ListenerFn invokeFunction) {
+      _invokeFunction = invokeFunction;
+      return *this;
+    }
+    Builder &requiredPred(StatePredicate requiredPred) {
+      _requiredPred = requiredPred;
+      return *this;
+    }
+  };
+
+  private:
+
   uint8_t _stateIndex = STATE_INDEX_INITIAL;
 
   const char * const _name;
@@ -74,19 +169,19 @@ class Mode {
 
   const uint32_t _minDuration = 0;
   const uint32_t _maxDuration = 0;
-  uint32_t _minGapDuration = 0;
+  const uint32_t _minGapDuration = 0;
 
   const uint16_t _perTimes = 0;
   const TimeUnit _perUnit = TimeUnitNone;
 
-  Mode *_idleMode = NULL;
-  std::vector<Mode*> _children;
-  uint8_t _childActivationLimit = 0;
-  uint8_t _childSimultaneousLimit = 0;
+  Mode * const _idleMode = NULL;
+  const std::vector<Mode*> _children;
+  const uint8_t _childActivationLimit = 0;
+  const uint8_t _childSimultaneousLimit = 0;
 
-  StateModFn _inspirationFn;
-  ListenerFn _invokeFunction;
-  StatePredicate _requiredFunction;
+  const StateModFn _inspirationFn = NULL;
+  const ListenerFn _invokeFunction = NULL;
+  const StatePredicate _requiredPred = NULL;
 
   uint8_t _countParents = 0;
   uint8_t _supportiveParents = 0;
@@ -98,17 +193,7 @@ class Mode {
   }
 
   public:
-  Mode(const char *name, uint8_t repeatLimit = 0, uint32_t minDuration = 0, uint32_t maxDuration = 0);
-
-  /** Construct periodic Mode. */
-  Mode(const char *name, uint16_t times, TimeUnit perUnit);
-
-  /** Construct invoker Mode. */
-  Mode(const char *name, ListenerFn invokeFunction)
-  : _name(name),
-    _invokeFunction(invokeFunction)
-  {
-  }
+  Mode(const Builder &builder);
 
   void attach(RespireStateBase &state);
 
@@ -132,20 +217,10 @@ class Mode {
   }
 
   bool requiredState(const AppState &state) const {
-    if (_requiredFunction==NULL) {
+    if (_requiredPred==NULL) {
       return true;
     }
-    return _requiredFunction(state);
-  }
-
-  Mode &requiredFunction(StatePredicate fn) {
-    _requiredFunction = fn;
-    return *this;
-  }
-
-  Mode &invokeFunction(ListenerFn fn) {
-    _invokeFunction = fn;
-    return *this;
+    return _requiredPred(state);
   }
 
   ListenerFn invokeFunction() const {
@@ -154,41 +229,11 @@ class Mode {
 
   bool persistent(const AppState &state) const;
 
-  Mode &setInspiration(StateModFn fn) {
-    _inspirationFn = fn;
-    return *this;
-  }
-
   const char *name() const {
     return _name;
   }
 
   ActivationType activation(const AppState &state, const AppState &oldState) const;
-
-  Mode &minGapDuration(uint32_t gap) {
-    _minGapDuration = gap;
-    return *this;
-  }
-  Mode &idleMode(Mode *mode) {
-    _idleMode = mode;
-    return *this;
-  }
-
-  Mode &addChild(Mode *child) {
-    _children.push_back(child);
-    ++child->_countParents;
-    return *this;
-  }
-
-  Mode &childActivationLimit(uint8_t limit) {
-    _childActivationLimit = limit;
-    return *this;
-  }
-
-  Mode &childSimultaneousLimit(uint8_t limit) {
-    _childSimultaneousLimit = limit;
-    return *this;
-  }
 
   ModeState &modeState(AppState &state);
   const ModeState &modeState(const AppState &state) const;
@@ -230,9 +275,10 @@ class Mode {
   bool triggered(const AppState &state) const;
 
   void dump(const AppState &state) const {
-    Log.Debug("Mode: \"%20s\" [%8s][%7s]", _name,
+    Log.Debug("Mode: \"%20s\" [%8s][%7s] parents=%d", _name,
       (isActive(state) ? "Active" : "Inactive"),
-      (requiredState(state) ? "Ready" : "Unready"));
+      (requiredState(state) ? "Ready" : "Unready"),
+      _countParents);
     if (_repeatLimit==0) {
       Log.Debug_(" invocations: %d,", (int)modeState(state)._invocationCount);
     }
@@ -370,8 +416,6 @@ class RespireContext {
     _appState.reset();
 
     _modeMain.collect(_invokeModes, _timeDependentModes);
-    Log.Debug("RespireContext::init() %d %d" CR, _invokeModes.size(), _timeDependentModes.size());
-    // assert(_timeDependentModes.size()==3);
 
     _modeMain.attach(_appState);
 
@@ -451,8 +495,8 @@ class RespireContext {
     _appState.millis(_clock->millis());
 
     if (checkTimeTriggers()) {
-      TAppState oldState(_appState);
-      onUpdate(oldState); // TODO: Just pass _appState. It's a const arg.
+      TAppState oldState(_appState); // TODO: Why do we need this?
+      onUpdate(oldState); // The only thing that changed was millis. Don't bother making a copy of state for comparison.
     }
   }
 
@@ -494,3 +538,5 @@ template <class TAppState>
 StateTransaction<TAppState>::~StateTransaction() {
   _context.resumeActions(_initialState);
 }
+
+#endif

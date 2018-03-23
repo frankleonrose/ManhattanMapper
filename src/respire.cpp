@@ -1,27 +1,33 @@
 #include "mm_state.h"
 #include <Logging.h>
 
-Mode::Mode(const char *name, uint8_t repeatLimit, uint32_t minDuration, uint32_t maxDuration)
-: _name(name),
-  _repeatLimit(repeatLimit),
-  _minDuration(minDuration),
-  _maxDuration(maxDuration)
+Mode::Mode(const Builder &builder)
+: _name(builder._name),
+  _repeatLimit(builder._repeatLimit),
+  _minDuration(builder._minDuration),
+  _maxDuration(builder._maxDuration),
+  _minGapDuration(builder._minGapDuration),
+  _perTimes(builder._perTimes),
+  _perUnit(builder._perUnit),
+  _idleMode(builder._idleMode),
+  _children(builder._children),
+  _childActivationLimit(builder._childActivationLimit),
+  _childSimultaneousLimit(builder._childSimultaneousLimit),
+  _inspirationFn(builder._inspirationFn),
+  _invokeFunction(builder._invokeFunction),
+  _requiredPred(builder._requiredPred)
 {
-}
-
-Mode::Mode(const char *name, uint16_t times, TimeUnit perUnit)
-: _name(name),
-  _perTimes(times),
-  _perUnit(perUnit)
-{
+  // Don't do anything with referred Modes (children, etc) here because they may not yet be initialized.
 }
 
 void Mode::attach(RespireStateBase &state) {
   if (_stateIndex!=STATE_INDEX_INITIAL) {
+    ++_countParents;
     return;
   }
   _stateIndex = state.allocateMode();
 
+  _countParents = 1;
   _supportiveFrame = 0;
 
   ModeState &ms = state.modeState(_stateIndex);
@@ -177,6 +183,7 @@ bool Mode::terminate(AppState &state) {
 
 uint8_t Mode::decSupportiveParents(const AppState &state) {
   if (state.changeCounter()!=_supportiveFrame) {
+    // assert(0 < _countParents);
     Log.Debug("Resetting parents to %d\n", (int)_countParents);
     _supportiveParents = _countParents;
     _supportiveFrame = state.changeCounter();
