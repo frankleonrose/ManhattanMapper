@@ -390,6 +390,25 @@ void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeri
 }
 
 void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  char filename[300];
+  const GpsSample &gps = state.gpsSample();
+  sprintf(filename, "/gps/%04d%02d%02d/%02d%02d.csv", (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute);
+
+  char dataString[300];
+  sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,battery,frame", // TODO frame & battery
+        (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
+        gps._latitude, gps._longitude, gps._altitude, gps._HDOP /*, state.ttnFrameUp(), state.batteryLevel() */);
+
+  Log.Debug("Writing \"%s\" to file \"%s\"\n", dataString, filename);
+
+  File dataFile = SD.open(filename, FILE_WRITE);
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+  }
+  else {
+    Log.Error("error opening %s\n", filename);
+  }
   gRespire.complete(triggeringMode);
 }
 
