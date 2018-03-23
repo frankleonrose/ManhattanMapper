@@ -43,6 +43,7 @@ Mode ModeMain(Mode::Builder("Main")
   Mode ModeReadAndSend(Mode::Builder("ReadAndSend")
       .addChild(&ModeReadGps)
       .addChild(&ModeSend)
+      .addChild(&ModeLogGps)
       .requiredPred([](const AppState &state) -> bool {
         return state.getJoined();
       }));
@@ -51,6 +52,9 @@ Mode ModeMain(Mode::Builder("Main")
       .requiredPred([](const AppState &state) -> bool {
         return state.hasGpsFix();
       }));
+  Mode ModeLogGps(Mode::Builder("LogGps")
+      .invokeFn(writeLocation)
+      .followMode(&ModeSend));
   Mode ModeLowPowerSend(Mode::Builder("LowPowerSend")
       .repeatLimit(1)
       .addChild(&ModeReadAndSend)

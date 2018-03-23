@@ -84,6 +84,7 @@ class Mode {
     TimeUnit _perUnit = TimeUnitNone;
 
     Mode *_idleMode = NULL;
+    Mode *_followMode = NULL;
     std::vector<Mode*> _children;
     uint8_t _childActivationLimit = 0;
     uint8_t _childSimultaneousLimit = 0;
@@ -128,13 +129,15 @@ class Mode {
       return *this;
     }
     Builder &idleMode(Mode *idleMode) {
-      printf("idleMode: %p\n", idleMode);
       _idleMode = idleMode;
+      return *this;
+    }
+    Builder &followMode(Mode *followMode) {
+      _followMode = followMode;
       return *this;
     }
     Builder &addChild(Mode *child) {
       assert(child!=NULL);
-      printf("addChild: %p\n", child);
       _children.push_back(child);
       return *this;
     }
@@ -175,6 +178,7 @@ class Mode {
   const TimeUnit _perUnit = TimeUnitNone;
 
   Mode * const _idleMode = NULL;
+  Mode * const _followMode = NULL;
   const std::vector<Mode*> _children;
   const uint8_t _childActivationLimit = 0;
   const uint8_t _childSimultaneousLimit = 0;
@@ -290,6 +294,10 @@ class Mode {
     if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
     if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", modeState(state)._invocationActive ? "Running" : "Not running");
     Log.Debug_("\n");
+
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      (*m)->dump(state);
+    }
   }
 };
 

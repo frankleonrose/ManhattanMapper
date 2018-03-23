@@ -44,6 +44,7 @@ static struct {
   FNAME(sendLocation),
   FNAME(sendLocationAck),
   FNAME(readGpsLocation),
+  FNAME(writeLocation),
 };
 
 class TestExecutor : public Executor {
@@ -206,7 +207,7 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
   }
 
   {
-    TestExecutor expectedOps(changeGpsPower, readGpsLocation, sendLocationAck, NULL);
+    TestExecutor expectedOps(changeGpsPower, readGpsLocation, sendLocationAck, writeLocation, changeSleep, NULL);
     respire.setExecutor(&expectedOps);
 
     state.setGpsFix(true);
@@ -219,21 +220,22 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
     TEST_ASSERT_FALSE(state.getGpsPower());
     TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
     TEST_ASSERT(ModeSend.isActive(state));
+    TEST_ASSERT_FALSE(ModeLogGps.isActive(state));
     TEST_ASSERT_FALSE(ModeSleep.isActive(state));
 
-    TEST_ASSERT(expectedOps.check());
-  }
-
-  {
-    TestExecutor expectedOps(changeSleep, NULL);
-    respire.setExecutor(&expectedOps);
-
     respire.complete(ModeSendAck);
+
+    TEST_ASSERT_FALSE(ModeSend.isActive(state));
+    TEST_ASSERT(ModeLogGps.isActive(state));
+    TEST_ASSERT_FALSE(ModeSleep.isActive(state));
+
+    respire.complete(ModeLogGps);
 
     TEST_ASSERT(state.getJoined());
     TEST_ASSERT_FALSE(state.getGpsPower());
     TEST_ASSERT_FALSE(ModeLowPowerGpsSearch.isActive(state));
     TEST_ASSERT_FALSE(ModeSend.isActive(state));
+    TEST_ASSERT_FALSE(ModeLogGps.isActive(state));
     TEST_ASSERT(ModeSleep.isActive(state));
 
     TEST_ASSERT(expectedOps.check());
@@ -371,6 +373,7 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
   else {
     respire.complete(ModeSendNoAck);
   }
+  respire.complete(ModeLogGps);
   respire.loop();
 
   TEST_ASSERT_MESSAGE(ModePeriodicSend.isActive(state), context);
@@ -406,7 +409,7 @@ void test_send_every_10_min(void) {
   TEST_ASSERT_FALSE(ModeLowPowerJoin.isActive(state));
   TEST_ASSERT(expectedOps.check());
 
-  startedSendAfter(respire, "[first pass]", state, clock, 1, sendLocationAck, NULL);
+  startedSendAfter(respire, "[first pass]", state, clock, 1, sendLocationAck, writeLocation, NULL);
 
   {
     // Some time passes and we stay in same state and nothing happens.
@@ -424,7 +427,7 @@ void test_send_every_10_min(void) {
   }
 
   // Full period passes and we start another send.
-  startedSendAfter(respire, "[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, NULL);
+  startedSendAfter(respire, "[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, writeLocation, NULL);
 }
 
 int main(int argc, char **argv) {
@@ -458,6 +461,9 @@ void attemptJoin(const AppState &state, const AppState &oldState) {
 
 void changeSleep(const AppState &state, const AppState &oldState) {
   // Enter or exit Sleep state
+}
+
+void writeLocation(const AppState &state, const AppState &oldState) {
 }
 
 void sendLocation(const AppState &state, const AppState &oldState) {

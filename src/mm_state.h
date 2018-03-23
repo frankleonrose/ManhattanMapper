@@ -33,6 +33,7 @@ extern void attemptJoin(const AppState &state, const AppState &oldState);
 extern void changeSleep(const AppState &state, const AppState &oldState);
 extern void sendLocation(const AppState &state, const AppState &oldState);
 extern void sendLocationAck(const AppState &state, const AppState &oldState);
+extern void writeLocation(const AppState &state, const AppState &oldState);
 
 // Modes
 extern Mode ModeMain;
@@ -48,6 +49,7 @@ extern Mode ModeReadGps;
 extern Mode ModeSend;
 extern Mode ModeSendNoAck;
 extern Mode ModeSendAck;
+extern Mode ModeLogGps;
 
 #define SAMPLE_VALID_FOR_MS 2000
 
@@ -156,7 +158,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void dump() const {
-    Log.Debug("AppState:\n");
+    Log.Debug("AppState: ----------------\n");
     Log.Debug("- Millis:             %u\n", (long unsigned)millis());
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
     Log.Debug("- USB Power [Input]:  %T\n", _usbPower);
@@ -167,18 +169,7 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
     Log.Debug("- GPS Latitude, Longitude, Altitude, HDOP [Input]: %f, %f, %f, %f\n", _latitude, _longitude, _altitude, _HDOP);
     ModeMain.dump(*this);
-    ModeSleep.dump(*this);
-    ModeLowPowerJoin.dump(*this);
-    ModePeriodicJoin.dump(*this);
-    ModeAttemptJoin.dump(*this);
-    ModeLowPowerGpsSearch.dump(*this);
-    ModeLowPowerSend.dump(*this);
-    ModePeriodicSend.dump(*this);
-    ModeReadAndSend.dump(*this);
-    ModeReadGps.dump(*this);
-    ModeSend.dump(*this);
-    ModeSendNoAck.dump(*this);
-    ModeSendAck.dump(*this);
+    Log.Debug("AppState: ---------------- END\n");
   }
 
   virtual void onChange(const AppState &oldState, Executor *executor) {

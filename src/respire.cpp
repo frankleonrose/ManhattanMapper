@@ -9,6 +9,7 @@ Mode::Mode(const Builder &builder)
   _minGapDuration(builder._minGapDuration),
   _perTimes(builder._perTimes),
   _perUnit(builder._perUnit),
+  _followMode(builder._followMode),
   _idleMode(builder._idleMode),
   _children(builder._children),
   _childActivationLimit(builder._childActivationLimit),
@@ -321,9 +322,16 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
   else {
     // Not active. Should activate?
-    if (parentActivation==ActivationIdleCell
-        || (parentActivation==ActivationInspiring && requiredState(state))
-        || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState))) {
+    assert(!(parentActivation==ActivationIdleCell && _followMode!=NULL)); // We don't currently support idleModes that are also followers.
+    if ((_followMode==NULL
+          && (parentActivation==ActivationIdleCell
+          || (parentActivation==ActivationInspiring && requiredState(state))
+          || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState))))
+        || (_followMode!=NULL
+          && !_followMode->isActive(state) && _followMode->isActive(oldState) // Prior terminated
+          && requiredState(state)
+          && (parentActivation==ActivationInspiring || parentActivation==ActivationActive || ActivationSustaining)
+          )) {
       // Either parent activation or requiredState (or both) just transitioned to true.
       if (parentActivation==ActivationInspiring) {
         reset(state); // Reset invocation count. We're in a fresh parent!
