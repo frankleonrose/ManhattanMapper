@@ -23,6 +23,36 @@ std::function< void(void) > gReadFailure;
 #define GPSECHO false
 
 static volatile bool gpsHasFixStatus;
+static uint8_t gpsFixIndex;
+static bool gpsFixHistory[5];
+static Adafruit_ZeroTimer gpsFixTimer = Adafruit_ZeroTimer(3);
+static bool ledFlash;
+void gpsFixISR(struct tc_module *const module_inst) {
+  // Used to distinguish between 2 signals
+  // No GPS Fix: ____----____----____----____----____----____----         (1s low, 1s high)
+  // Yes GPS Fix: __________-____________________________-________________ (15s low, 200ms high)
+  // Called every 350ms, fill a buffer of 5 samples. If two of them are high, it's the first signal.
+  // Period must be:
+  //   p < 500 so that a high signal for 1 second will always yield two high samples
+  //   p > 333 so that if we start sampling at low start, the 4th & 5th samples will be in the high phase.
+  //   Prefer a shorter period so that 5 cycles happen more quickly and we recognize our state.
+  //   I choose 350ms to give a little wiggle room. The GPS clock is ns accurate, but our mcu timer is not.
+  //   Worst case, it'll take 5 * 350ms (1.75s) to figure out we lost fix. 1s to figure out we acheived fix.
+
+  digitalWrite(LED_BUILTIN, (ledFlash = !ledFlash));
+
+  bool sample = digitalRead(GPS_FIX_PIN);
+  gpsFixHistory[gpsFixIndex] = sample;
+
+  uint8_t countHigh = 0;
+  for (int i=0; i<ELEMENTS(gpsFixHistory); ++i) {
+    if (gpsFixHistory[i]) {
+      ++countHigh;
+    }
+  }
+  gpsHasFixStatus = (countHigh <= 1);
+}
+
 bool gpsHasFix() {
   return gpsHasFixStatus;
 }
@@ -61,7 +91,23 @@ void gpsSetup()
   pinMode(GPS_ENABLE_PIN, OUTPUT);
   digitalWrite(GPS_ENABLE_PIN, HIGH); // Disabled initially
 
+  pinMode(GPS_FIX_PIN, INPUT);
+
   gpsHasFixStatus = false;
+  gpsFixIndex = 0;
+  for (int i=0; i<ELEMENTS(gpsFixHistory); ++i) {
+    gpsFixHistory[i] = false;
+  }
+
+  /********************* Timer #4, 8 bit, one callback with adjustable period = 350KHz ~ 2.86us for DAC updates */
+  gpsFixTimer.configure(TC_CLOCK_PRESCALER_DIV64, // prescaler: 48000(m0 clock freq) / 64(prescaler) = 750kHz
+                TC_COUNTER_SIZE_32BIT,            // bit width of timer/counter
+                TC_WAVE_GENERATION_MATCH_FREQ     // match style
+                );
+
+  gpsFixTimer.setPeriodMatch(262500, 1, 0); // 350ms period = 2.857Hz = 750k / 262500, 1 match, 0 channel
+  gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);  // set DAC in the callback
+  gpsFixTimer.enable(true);
 }
 
 void gpsLoop(Print &printer)
