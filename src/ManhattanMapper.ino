@@ -169,27 +169,27 @@ void onReceive(const uint8_t *payload, size_t size, port_t port) {
   Log.Debug(F("Message [%d]: %*m" CR), size, size, payload);
 }
 
-uint8_t readBatteryLevel() {
-    #define VBATPIN A7
-
-    float measuredvbat = analogRead(VBATPIN);
+uint8_t readVoltageLevel(uint16_t pin) {
+    float measuredvbat = analogRead(pin);
     measuredvbat *= 2;    // we divided by 2, so multiply back
     measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
     measuredvbat /= 1024; // convert to voltage
-    Log.Debug("VBat: %f", measuredvbat);
+    // Log.Debug("Voltage at %d: %f", (int)pin, measuredvbat);
 
     // Normalize to 0-100
-    float minv = 3.2;
-    float maxv = 4.2;
-    uint8_t level = 100 * (measuredvbat - minv) / (maxv - minv);
-    Log.Debug_(" [VBat int: %d]" CR, level);
+    const float minv = 2.7;
+    const float maxv = 5.2;
+    int16_t level = 100 * (measuredvbat - minv) / (maxv - minv);
+    // Log.Debug_(" [Rating 0-100 between %f and %f int: %d]" CR, minv, maxv, (int)level);
     if (level<0) {
       level = 0;
     }
     else if (level>100) {
       level = 100;
     }
-    return level;
+// debug: Voltage at 9: 4.33 [Rating 0-100 between 2.70 and 5.20 int: 65]
+// debug: Voltage at 15: 5.02 [Rating 0-100 between 2.70 and 5.20 int: 92]
+    return (uint8_t)level;
 }
 
 uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
@@ -224,7 +224,7 @@ bool do_send(const AppState &state, const bool withAck) {
     packet[0] = PACKET_FORMAT_ID;
     uint8_t bytes = state.gpsSample().writePacket(packet+1, sizeof(packet)-1);
     assert(bytes+2==sizeof(packet));
-    packet[sizeof(packet)-1] = readBatteryLevel();
+    packet[sizeof(packet)-1] = readVoltageLevel(VBATPIN);
 
     Log.Debug(F("Writing packet: %*m" CR), sizeof(packet), packet);
 
@@ -247,6 +247,9 @@ void dumpGps() {
 
 void setup() {
     //  attachInterrupt(A0, onA0Change, CHANGE);
+
+    pinMode(VBATPIN, INPUT);
+    pinMode(VUSBPIN, INPUT);
 
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
@@ -326,7 +329,15 @@ void setup() {
     // Log.Debug(F("LMIC_setDrTxpow" CR));
     // LMIC_setDrTxpow(DR_SF7, 14);
 
-    gpsTimer.every(60 * 1000, dumpGps);
+    gTimer.every(10 * 1000, dumpGps);
+    gTimer.every(1000, []() {
+      readVoltageLevel(VBATPIN);
+    });
+    gTimer.after(500, [](){
+      gTimer.every(1000, []() {
+        readVoltageLevel(VUSBPIN);
+      });
+    });
 
     Log.Debug(F("Setup GPS" CR));
     gpsSetup();
