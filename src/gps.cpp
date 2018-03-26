@@ -22,11 +22,11 @@ std::function< void(void) > gReadFailure;
 // Set to 'true' if you want to debug and listen to the raw GPS sentences.
 #define GPSECHO false
 
-static volatile bool gpsHasFixStatus;
-static uint8_t gpsFixIndex;
+static volatile bool gpsHasFixStatus = false;
+static uint8_t gpsFixIndex = 0;
 static bool gpsFixHistory[5];
-static Adafruit_ZeroTimer gpsFixTimer = Adafruit_ZeroTimer(3);
-static bool ledFlash;
+static Adafruit_ZeroTimer gpsFixTimer = Adafruit_ZeroTimer(4);
+static bool ledFlash = false;
 void gpsFixISR(struct tc_module *const module_inst) {
   // Used to distinguish between 2 signals
   // No GPS Fix: ____----____----____----____----____----____----         (1s low, 1s high)
@@ -43,9 +43,10 @@ void gpsFixISR(struct tc_module *const module_inst) {
 
   bool sample = digitalRead(GPS_FIX_PIN);
   gpsFixHistory[gpsFixIndex] = sample;
+  gpsFixIndex = ++gpsFixIndex % ELEMENTS(gpsFixHistory);
 
   uint8_t countHigh = 0;
-  for (int i=0; i<ELEMENTS(gpsFixHistory); ++i) {
+  for (uint8_t i=0; i<ELEMENTS(gpsFixHistory); ++i) {
     if (gpsFixHistory[i]) {
       ++countHigh;
     }
@@ -65,6 +66,7 @@ void gpsEnable(bool enable) {
 void gpsSetup()
 {
 
+  Log.Debug("gpsSetup begin\n");
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
   GPS.begin(9600);
 
@@ -95,9 +97,11 @@ void gpsSetup()
 
   gpsHasFixStatus = false;
   gpsFixIndex = 0;
-  for (int i=0; i<ELEMENTS(gpsFixHistory); ++i) {
+  for (uint8_t i=0; i<ELEMENTS(gpsFixHistory); ++i) {
     gpsFixHistory[i] = false;
   }
+
+  Log.Debug("gpsSetup setup fix timer\n");
 
   /********************* Timer #4, 8 bit, one callback with adjustable period = 350KHz ~ 2.86us for DAC updates */
   gpsFixTimer.configure(TC_CLOCK_PRESCALER_DIV64, // prescaler: 48000(m0 clock freq) / 64(prescaler) = 750kHz
@@ -107,7 +111,9 @@ void gpsSetup()
 
   gpsFixTimer.setPeriodMatch(262500, 1, 0); // 350ms period = 2.857Hz = 750k / 262500, 1 match, 0 channel
   gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);  // set DAC in the callback
+  Log.Debug("gpsSetup enable fix timer\n");
   gpsFixTimer.enable(true);
+  Log.Debug("gpsSetup done\n");
 }
 
 void gpsLoop(Print &printer)
@@ -119,10 +125,11 @@ void gpsLoop(Print &printer)
 
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
-    if (gReadSuccess) {
-      Log.Debug("GPS string: %s\n", GPS.lastNMEA());
+    char *gpsInput = GPS.lastNMEA(); // Resets the newNMEAreceived() flag to false
+    // Log.Debug("GPS NMEA string: %s\n", gpsInput);
+    if (gReadSuccess && strstr(gpsInput, "$GPGGA")!=NULL && GPS.year!=0) {
       // We are interested in a new location
-      if (GPS.parse(GPS.lastNMEA())) {   // this also sets the newNMEAreceived() flag to false
+      if (GPS.parse(gpsInput)) {
         GpsSample sample(GPS.latitudeDegrees, GPS.longitudeDegrees, GPS.altitude, GPS.HDOP, 2000 + GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
         gReadSuccess(sample);
       }
@@ -131,6 +138,11 @@ void gpsLoop(Print &printer)
       }
       gReadSuccess = NULL;
       gReadFailure = NULL;
+    }
+    else {
+      if (!GPS.parse(gpsInput)) {
+        Log.Warn("Failed to parse GPS string \"%s\"\n", gpsInput);
+      }
     }
   }
 }
@@ -142,34 +154,34 @@ void gpsRead(std::function< void(const GpsSample &gpsSample) > success, std::fun
 }
 
 void gpsDump(Print &printer) {
-  // printer.print("Date: 20");
-  // printer.print(GPS.year, DEC); printer.print('-');
-  // printer.print(GPS.month, DEC); printer.print('-');
-  // printer.println(GPS.day, DEC);
+  printer.print("Date: 20");
+  printer.print(GPS.year, DEC); printer.print('-');
+  printer.print(GPS.month, DEC); printer.print('-');
+  printer.println(GPS.day, DEC);
 
-  // printer.print("\nTime: ");
-  // printer.print(GPS.hour, DEC); printer.print(':');
-  // printer.print(GPS.minute, DEC); printer.print(':');
-  // printer.print(GPS.seconds, DEC); printer.print('.');
-  // printer.println(GPS.milliseconds);
+  printer.print("Time: ");
+  printer.print(GPS.hour, DEC); printer.print(':');
+  printer.print(GPS.minute, DEC); printer.print(':');
+  printer.print(GPS.seconds, DEC); printer.print('.');
+  printer.println(GPS.milliseconds);
 
-  // printer.print("Fix: "); printer.print((int)GPS.fix);
-  // printer.print(" quality: "); printer.println((int)GPS.fixquality);
-  // if (GPS.fix) {
-  //   printer.print("Location: (dddmm.ss)");
-  //   printer.print(GPS.latitude, 4); printer.print(GPS.lat);
-  //   printer.print(", ");
-  //   printer.print(GPS.longitude, 4); printer.println(GPS.lon);
-  //   printer.print("Location (degrees): ");
-  //   printer.print(GPS.latitudeDegrees, 4);
-  //   printer.print(", ");
-  //   printer.println(GPS.longitudeDegrees, 4);
+  printer.print("Fix: "); printer.print((int)GPS.fix);
+  printer.print(" quality: "); printer.println((int)GPS.fixquality);
+  if (GPS.fix) {
+    printer.print("Location: (dddmm.ss)");
+    printer.print(GPS.latitude, 4); printer.print(GPS.lat);
+    printer.print(", ");
+    printer.print(GPS.longitude, 4); printer.println(GPS.lon);
+    printer.print("Location (degrees): ");
+    printer.print(GPS.latitudeDegrees, 4);
+    printer.print(", ");
+    printer.println(GPS.longitudeDegrees, 4);
 
-  //   printer.print("Speed (knots): "); printer.println(GPS.speed);
-  //   printer.print("Angle: "); printer.println(GPS.angle);
-  //   printer.print("Altitude: "); printer.println(GPS.altitude);
-  //   printer.print("Satellites: "); printer.println((int)GPS.satellites);
-  // }
+    printer.print("Speed (knots): "); printer.println(GPS.speed);
+    printer.print("Angle: "); printer.println(GPS.angle);
+    printer.print("Altitude: "); printer.println(GPS.altitude);
+    printer.print("Satellites: "); printer.println((int)GPS.satellites);
+  }
 }
 
 #endif

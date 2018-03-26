@@ -57,7 +57,7 @@ Executor gExecutor;
 AppState gState;
 RespireContext<AppState> gRespire(gState, ModeMain, &gClock, &gExecutor);
 
-Timer gpsTimer;
+Timer gTimer;
 
 // Lorawan Device ID, App ID, and App Key
 const char *devEui = "006158A2D06A7A4E";
@@ -73,6 +73,9 @@ const unsigned TX_INTERVAL_SEC = 20; // 3600 // Every hour
 static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 
 // Pin mapping
+#define VBATPIN A7
+#define VUSBPIN A1
+
 #define SD_CARD_CS 10
 #define LORA_CS 8
 const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
@@ -239,7 +242,7 @@ bool do_send(const AppState &state, const bool withAck) {
 }
 
 void dumpGps() {
-  gpsDump(Serial);
+  // gpsDump(Serial);
 }
 
 void setup() {
@@ -256,17 +259,19 @@ void setup() {
     }
     Log.Debug(F("Starting" CR));
 
+    Log.Debug("Writing default value to NSS: %d", LORA_CS);
+    // digitalWrite(FRAM_CS, HIGH); // Default, unselected
+    // pinMode(FRAM_CS, OUTPUT);
+    pinMode(LORA_CS, OUTPUT);
+    digitalWrite(LORA_CS, HIGH); // Default, unselected
+
     if (!SD.begin(SD_CARD_CS)) {
       Log.Error("Card failed or not present\n");
       while (1);
     }
-    Log.Debug("SD card interface initialized.\n");
-
-    Log.Debug("Writing default value to NSS: %d", LORA_CS);
-    // digitalWrite(FRAM_CS, HIGH); // Default, unselected
-    // pinMode(FRAM_CS, OUTPUT);
-    digitalWrite(LORA_CS, HIGH); // Default, unselected
-    pinMode(LORA_CS, OUTPUT);
+    else {
+      Log.Debug("SD card interface initialized.\n");
+    }
 
     Log.Debug(F("Connecting to storage!" CR));
     bool status = byteStore.begin();
@@ -339,11 +344,13 @@ void setup() {
 void loop() {
   // Log.Debug(F("os_runloop_once" CR));
   lorawan.loop();
-  gpsLoop(Serial);
 
-  gpsTimer.update();
-
-  gState.setGpsFix(gpsHasFix()); // Quick if value didn't change
+  if (!ModeSend.isActive(gState)) {
+    // Don't do parsing or timer optional things that could throw off LoRa timing.
+    gpsLoop(Serial);
+    gTimer.update();
+    gState.setGpsFix(gpsHasFix()); // Quick if value didn't change
+  }
 
   gRespire.loop();
 }
@@ -366,7 +373,7 @@ void changeGpsPower(const AppState &state, const AppState &oldState, Mode *trigg
 }
 
 void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  Log.Debug("Reading GPS location: %d", state.getGpsPower());
+  Log.Debug("Reading GPS location with gps power: %T\n", state.getGpsPower());
   gpsRead([triggeringMode](const GpsSample &gpsSample) {
     Log.Debug("Successfully read GPS\n");
     gRespire.complete(triggeringMode, [&gpsSample](AppState &state){
@@ -389,10 +396,36 @@ void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeri
   Log.Debug("Entering sleep mode...\n");
 }
 
+bool makePath(char *filename) {
+  bool success = true;
+  for (char *sep = filename; success && (sep = strstr(sep, "/"))!=NULL; ++sep) {
+    if (sep==filename) {
+      continue; // No need to create root path /
+    }
+    *sep = '\0'; // Terminate at separator
+    if (!SD.exists(filename)) {
+      // Create if doesn't exist
+      Log.Debug("Path \"%s\" does not exist\n", filename);
+      if (!SD.mkdir(filename)) {
+        Log.Error("Failed to create path \"%s\"\n", filename);
+        success = false;
+      }
+    }
+    *sep = '/'; // Restore separator and check next path segment Ok
+  }
+  return true;
+}
+
 void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   char filename[300];
   const GpsSample &gps = state.gpsSample();
-  sprintf(filename, "/gps/%04d%02d%02d/%02d%02d.csv", (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute);
+
+  sprintf(filename, "/gps/%04d/%02d/%02d/%02d.csv", (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour);
+  if (!makePath(filename)) {
+    Log.Error("Failed to makePath %s\n", filename);
+    gRespire.complete(triggeringMode);
+    return;
+  }
 
   char dataString[300];
   sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,battery,frame", // TODO frame & battery
@@ -407,7 +440,7 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
     dataFile.close();
   }
   else {
-    Log.Error("error opening %s\n", filename);
+    Log.Error("Error opening %s\n", triggeringMode->name());
   }
   gRespire.complete(triggeringMode);
 }
@@ -421,7 +454,6 @@ void sendLocation(const AppState &state, const AppState &oldState, Mode *trigger
   else {
 
   }
-  gRespire.complete(triggeringMode);
 }
 
 void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
@@ -433,7 +465,6 @@ void sendLocationAck(const AppState &state, const AppState &oldState, Mode *trig
   else {
 
   }
-  gRespire.complete(triggeringMode);
 }
 
 #endif
