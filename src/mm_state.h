@@ -38,8 +38,20 @@ extern void sendLocation(const AppState &state, const AppState &oldState, Mode *
 extern void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 extern void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 
+extern void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+
 // Modes
 extern Mode ModeMain;
+extern Mode ModeDisplay;
+extern Mode ModeDisplayBlank;
+extern Mode ModeDisplayBlank2;
+extern Mode ModeDisplayStatus;
+extern Mode ModeDisplayParameters;
+extern Mode ModeDisplayErrors;
+extern Mode ModeFunctional;
 extern Mode ModeSleep;
 extern Mode ModeAttemptJoin;
 extern Mode ModeLowPowerJoin;
@@ -99,6 +111,10 @@ class AppState : public RespireState<AppState> {
   uint32_t _ttnFrameCounter;
   uint32_t _ttnLastSend;
 
+  // Display states
+  uint8_t _page = 0;
+  uint8_t _field = 0;
+
   // Dependent state - no setters
   bool _joined = false;
   bool _gpsPowerOut = false;
@@ -108,12 +124,14 @@ class AppState : public RespireState<AppState> {
     reset();
   }
 
-  AppState(const AppState& otherState)
+  AppState(const AppState &otherState)
   : RespireState(otherState),
     _usbPower(otherState._usbPower),
     _gpsFix(otherState._gpsFix),
     _gpsSample(otherState._gpsSample),
     _gpsSampleExpiry(otherState._gpsSampleExpiry),
+    _page(otherState._page),
+    _field(otherState._field),
     _joined(otherState._joined),
     _gpsPowerOut(otherState._gpsPowerOut)
   {}
@@ -133,7 +151,8 @@ class AppState : public RespireState<AppState> {
   }
 
   void setUsbPower(bool value) {
-    if (_usbPower==value) {
+    if (_usbPower == value)
+    {
       // Short circuit no change
       return;
     }
@@ -147,7 +166,8 @@ class AppState : public RespireState<AppState> {
   }
 
   void setGpsFix(bool value) {
-    if (_gpsFix==value) {
+    if (_gpsFix == value)
+    {
       // Short circuit no change
       return;
     }
@@ -169,7 +189,7 @@ class AppState : public RespireState<AppState> {
   }
 
   bool hasRecentGpsLocation() const {
-    return _gpsSampleExpiry!=0 && (millis() < _gpsSampleExpiry);
+    return _gpsSampleExpiry != 0 && (millis() < _gpsSampleExpiry);
   }
 
   bool getJoined() const {
@@ -177,7 +197,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void setJoined(bool value) {
-    if (_joined==value) {
+    if (_joined == value) {
       // Short circuit no change
       return;
     }
@@ -190,12 +210,40 @@ class AppState : public RespireState<AppState> {
     return _gpsPowerOut;
   }
 
+  uint8_t page() const {
+    return _page;
+  }
+
+  void page(uint8_t page) {
+    if (_page == page) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _page = page;
+    onUpdate(oldState);
+  }
+
+  uint8_t field() const {
+    return _field;
+  }
+
+  void field(uint8_t field) {
+    if (_field == field) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _field = field;
+    onUpdate(oldState);
+  }
+
   void transmittedFrame(const uint32_t frameCounter) {
     _ttnFrameCounter = frameCounter;
     _ttnLastSend = millis();
   }
 
-  void dump() const {
+  void dump(const Mode &mainMode = ModeMain) const {
     Log.Debug("AppState: ----------------\n");
     Log.Debug("- Millis:             %u\n", (long unsigned)millis());
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
@@ -208,12 +256,12 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- TTN Frame Up [Input]: %u\n", _ttnFrameCounter);
     Log.Debug("- TTN Last Send [Input]: %u\n", _ttnLastSend);
     _gpsSample.dump();
-    ModeMain.dump(*this);
+    mainMode.dump(*this);
     Log.Debug("AppState: ---------------- END\n");
   }
 
   virtual void onChange(const AppState &oldState, Executor *executor) {
-    _gpsPowerOut = _usbPower || ModeLowPowerGpsSearch.isActive(*this);
+    _gpsPowerOut = _usbPower || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
 
     // This should be simple listener or output transducer
     if (_gpsPowerOut!=oldState._gpsPowerOut) {

@@ -230,6 +230,15 @@ class Mode {
   public:
   Mode(const Builder &builder);
 
+  void deepReset() {
+    reset();
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      (*m)->deepReset();
+    }
+  }
+
+  bool attached() { return _stateIndex != STATE_INDEX_INITIAL; }
+
   void attach(RespireStateBase &state);
 
   void collect(std::vector<Mode*> &invokeModes, std::vector<Mode*> &timeDependentModes) {
@@ -343,12 +352,13 @@ class Mode {
   }
 };
 
+// template<int StateCount = 10>
 class RespireStateBase {
   uint32_t _changeCounter = 1;
   uint32_t _millis = 0;
 
   uint8_t _modesCount = 0;
-  ModeState _modeStates[15];
+  ModeState _modeStates[25];
 
   public:
 
@@ -358,7 +368,7 @@ class RespireStateBase {
     _modesCount = 0;
   }
 
-  virtual void dump() const = 0;
+  virtual void dump(const Mode &mainMode) const = 0;
 
   uint8_t allocateMode() {
     uint8_t alloc = _modesCount++;
@@ -451,7 +461,11 @@ class RespireContext {
   }
 
   ~RespireContext() {
+    // This dtor is most useful for tests.
+    // Generally not called in app because RespireContext is global that never leaves scope.
     _appState.setListener(NULL);
+    _modeMain.deepReset();
+    // Walk all nodes and restore to initial values.
   }
 
   void setExecutor(Executor *executor) {

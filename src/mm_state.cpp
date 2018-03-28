@@ -16,9 +16,52 @@ Mode ModeSend(Mode::Builder("Send")
                     .invokeFn(sendLocationAck)
                     .minGapDuration(DAYS_IN_MILLIS(1)));
 
-// Main
 Mode ModeMain(Mode::Builder("Main")
               .repeatLimit(1)
+              .addChild(&ModeDisplay)
+              .addChild(&ModeFunctional));
+  Mode ModeDisplay(Mode::Builder("Display")
+      .idleMode(&ModeDisplayBlank)
+      .addChild(&ModeDisplayBlank)
+      .addChild(&ModeDisplayBlank2)
+      .addChild(&ModeDisplayStatus)
+      .addChild(&ModeDisplayParameters)
+      .addChild(&ModeDisplayErrors));
+    Mode ModeDisplayBlank(Mode::Builder("DisplayBlank")
+        .invokeFn(displayBlank)
+        .invokeDelay(MINUTES_IN_MILLIS(1)));
+    Mode ModeDisplayBlank2(Mode::Builder("DisplayBlank2")
+        .invokeFn(displayBlank)
+        .requiredPred([](const AppState &state) -> bool {
+          return state.page()==0xFF;
+        }));
+    Mode ModeDisplayStatus(Mode::Builder("DisplayStatus")
+        .invokeFn(displayStatus)
+        .requiredPred([](const AppState &state) -> bool {
+          return state.page()==0;
+        })
+        .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
+          return state.field()!=oldState.field();
+        }));
+    Mode ModeDisplayParameters(Mode::Builder("DisplayParameters")
+        .invokeFn(displayParameters)
+        .requiredPred([](const AppState &state) -> bool {
+          return state.page()==1;
+        })
+        .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
+          return state.field()!=oldState.field();
+        }));
+    Mode ModeDisplayErrors(Mode::Builder("DisplayErrors")
+        .invokeFn(displayErrors)
+        .requiredPred([](const AppState &state) -> bool {
+          return state.page()==2;
+        })
+        .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
+          // Log.Debug("%s inspirationPred: %d != %d\n", ModeDisplayErrors.name(), (int)state.field(), (int)oldState.field());
+          return state.field()!=oldState.field();
+        }));
+
+Mode ModeFunctional(Mode::Builder("Functional")
               .idleMode(&ModeSleep)
               .addChild(&ModeSleep)
               .addChild(&ModeLowPowerJoin)

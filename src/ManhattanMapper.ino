@@ -478,4 +478,22 @@ void sendLocationAck(const AppState &state, const AppState &oldState, Mode *trig
   }
 }
 
+void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("displayBlank\n");
+}
+
+void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("displayStatus\n");
+}
+
+void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("displayParameters\n");
+}
+
+void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("displayErrors\n");
+}
+
+#endif
+
 #endif

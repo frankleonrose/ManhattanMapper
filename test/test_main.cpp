@@ -45,6 +45,10 @@ static struct {
   FNAME(sendLocationAck),
   FNAME(readGpsLocation),
   FNAME(writeLocation),
+  FNAME(displayBlank),
+  FNAME(displayStatus),
+  FNAME(displayParameters),
+  FNAME(displayErrors),
 };
 
 class TestExecutor : public Executor {
@@ -105,7 +109,7 @@ void test_gps_power_while_power(void) {
   AppState state;
   TestClock clock;
   TestExecutor expectedOps(NULL);
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
   respire.begin();
 
   {
@@ -150,7 +154,7 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state;
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
   respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
@@ -182,7 +186,7 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state;
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
   respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
@@ -247,7 +251,7 @@ void test_5m_limit_on_low_power_gps_search(void) {
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state;
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
   respire.begin();
 
   respire.complete(ModeAttemptJoin, [](AppState &state){
@@ -308,10 +312,13 @@ void startedJoinAfter(RespireContext<AppState> &respire, const char *context, Ap
 }
 
 void test_join_every_5_min(void) {
+  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicJoin._perUnit, TimeUnitHour, "Tests expect 6 sends per *hour*");
+  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicJoin._perTimes, 12, "Tests expect *6* sends per hour");
+
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state;
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
   respire.begin();
 
   // Setup our state...
@@ -386,10 +393,13 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
 }
 
 void test_send_every_10_min(void) {
+  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicSend._perUnit, TimeUnitHour, "Tests expect 6 sends per *hour*");
+  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicSend._perTimes, 6, "Tests expect *6* sends per hour");
+
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, NULL);
   AppState state;
-  RespireContext<AppState> respire(state, ModeMain, &clock, &expectedOps);
+  RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
 
   respire.begin();
 
@@ -432,6 +442,46 @@ void test_send_every_10_min(void) {
   startedSendAfter(respire, "[second pass]", state, clock, 5 * 60 /* 5 min more, for total of 10 minutes */, readGpsLocation, sendLocation, writeLocation, NULL);
 }
 
+void test_display(void) {
+  TestClock clock;
+  TestExecutor expectedOps(displayStatus, displayParameters, displayErrors, NULL);
+  AppState state;
+  RespireContext<AppState> respire(state, ModeDisplay, &clock, &expectedOps);
+
+  respire.begin();
+
+  state.page(0);
+  respire.complete(&ModeDisplayStatus);
+  state.page(1);
+  respire.complete(&ModeDisplayParameters);
+  state.page(2);
+  respire.complete(&ModeDisplayErrors);
+
+  TEST_ASSERT(expectedOps.check());
+
+  {
+    TestExecutor expectedOps(displayErrors, displayErrors, displayErrors, NULL);
+    respire.setExecutor(&expectedOps);
+
+    for (uint8_t field=1; field<4; ++field) {
+      state.field(field);
+      respire.complete(&ModeDisplayErrors);
+    }
+
+    TEST_ASSERT(expectedOps.check());
+  }
+
+  {
+    TestExecutor expectedOps(displayBlank, NULL);
+    respire.setExecutor(&expectedOps);
+
+    clock.advanceSeconds(61);
+    respire.loop();
+
+    TEST_ASSERT(expectedOps.check());
+  }
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     LogPrinter printer(printFn);
@@ -443,6 +493,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_5m_limit_on_low_power_gps_search);
     RUN_TEST(test_join_every_5_min);
     RUN_TEST(test_send_every_10_min);
+    RUN_TEST(test_display);
     UNITY_END();
 
     return 0;
@@ -474,6 +525,22 @@ void sendLocation(const AppState &state, const AppState &oldState, Mode *trigger
 
 void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Send location
+}
+
+void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("Test displayBlank\n");
+}
+
+void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("Test displayStatus\n");
+}
+
+void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("Test displayParameters\n");
+}
+
+void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  Log.Debug("Test displayErrors\n");
 }
 
 #endif
