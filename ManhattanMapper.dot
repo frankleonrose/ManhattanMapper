@@ -1,0 +1,148 @@
+digraph Root {
+
+  label=""
+  bgcolor="lightgray"
+  fontcolor="white"
+  style="rounded"
+
+  node [shape = "box", style="rounded"]
+  edge [style="invis"]
+
+  subgraph clusterShared {
+    Shared [shape = "plaintext"]
+
+    AttemptJoin [label = "AttemptJoin\n[invoke: attemptJoin()]\l"]
+
+    subgraph clusterReadAndSend {
+      label = ""
+      ReadAndSend [shape = "plaintext"]
+
+      ReadGps
+
+      subgraph clusterSend {
+        Send [label = "Send\n[maxChildSimultaneous: 1]\l[maxChildInvocations: 1]\l", shape = "plaintext"]
+
+        SendNoAck
+        SendWithAck
+
+        Send -> SendNoAck
+        Send -> SendWithAck
+      }
+
+      ReadAndSend -> ReadGps
+      ReadAndSend -> Send
+  	}
+
+    Shared -> AttemptJoin
+    Shared -> ReadAndSend
+  }
+
+  subgraph clusterMain {
+    Main [shape = "plaintext"]
+
+    subgraph clusterDisplay {
+      Display [shape = "plaintext"]
+
+      DisplayBlank
+        [label = "DisplayBlank\n[idle]\n[invokeDelay: 60min]\l[invoke: displayBlank()]\l"]
+
+      DisplayBlankPage
+        [label = "DisplayBlankPage\n[required: page==0xFF]\l[invoke: displayBlank()]\l"]
+
+      DisplayStatus
+        [label = "DisplayStatus\n[required: page==0]\l[inspiring: change(field)]\l[invoke: displayStatus()]\l"]
+
+      DisplayParameters
+        [label = "DisplayParameters\n[required: page==1]\l[inspiring: change(field)]\l[invoke: displayParameters()]\l"]
+
+      DisplayErrors
+        [label = "DisplayErrors\n[required: page==2]\l[inspiring: change(field)]\l[invoke: displayErrors()]\l"]
+
+      Display -> DisplayBlank
+      Display -> DisplayBlankPage
+      Display -> DisplayStatus
+      Display -> DisplayParameters
+      Display -> DisplayErrors
+    }
+
+    subgraph clusterFunctional {
+      Functional [shape = "plaintext"]
+
+      Sleep [label = "Sleep\n[idle]\n[invoke: goToSleep()]"]
+
+      subgraph clusterLowPower {
+        LowPower [
+          shape = "plaintext"
+          label = "LowPower\n[required: !usbPower]\l"
+        ]
+
+        subgraph clusterLowPowerAttemptJoin {
+          LowPowerAttemptJoin [shape = "plaintext"]
+
+          AttemptJoin1 [label = "AttemptJoin (shared)"]
+
+          LowPowerAttemptJoin -> AttemptJoin1
+        }
+
+        subgraph clusterLowPowerGpsSearch {
+          LowPowerGpsSearch [
+            shape = "plaintext"
+            label = "LowPowerGpsSearch\n[required: !gpsFix]\l"
+          ]
+        }
+
+        subgraph clusterLowPowerSend {
+          LowPowerSend [shape = "plaintext"]
+
+          ReadAndSend2 [label = "ReadAndSend (shared)"]
+
+          LowPowerSend -> ReadAndSend2
+        }
+
+        LowPower -> LowPowerAttemptJoin
+        LowPower -> LowPowerGpsSearch
+        LowPower -> LowPowerSend
+      }
+
+      subgraph clusterUSBPower {
+        USBPower [
+          shape = "plaintext"
+          label = "USBPower\n[required: usbPower]\l"
+        ]
+
+        subgraph clusterUSBPowerPeriodicJoin {
+          USBPowerPeriodicJoin [
+            shape = "plaintext"
+            label = "USBPowerPeriodicJoin\n[required: !joined]\l[periodic: 12 per hour]\l"
+          ]
+
+          AttemptJoin2 [label = "AttemptJoin (shared)"]
+
+          USBPowerPeriodicJoin -> AttemptJoin2
+        }
+
+        subgraph clusterUSBPowerPeriodicSend {
+          USBPowerPeriodicSend [
+            shape = "plaintext"
+            label = "USBPowerPeriodicSend\n[required: joined AND gpsFix]\l[periodic: 6 per hour]\l"
+          ]
+
+          ReadAndSend1 [label = "ReadAndSend (shared)"]
+
+          USBPowerPeriodicSend -> ReadAndSend1
+        }
+
+        USBPower -> USBPowerPeriodicJoin
+        USBPower -> USBPowerPeriodicSend
+      }
+
+      edge [arrowType = "none"]
+      Functional -> Sleep
+      Functional -> LowPower
+      Functional -> USBPower
+    }
+
+    Main -> Functional
+    Main -> Display
+  }
+}
