@@ -9,12 +9,12 @@ Mode::Mode(const Builder &builder)
   _minGapDuration(builder._minGapDuration),
   _perTimes(builder._perTimes),
   _perUnit(builder._perUnit),
-  _followMode(builder._followMode),
   _idleMode(builder._idleMode),
+  _followMode(builder._followMode),
   _children(builder._children),
   _childActivationLimit(builder._childActivationLimit),
   _childSimultaneousLimit(builder._childSimultaneousLimit),
-  _inspirationFn(builder._inspirationFn),
+  _inspirationPred(builder._inspirationPred),
   _invokeFunction(builder._invokeFunction),
   _requiredPred(builder._requiredPred)
 {
@@ -71,7 +71,7 @@ bool Mode::expired(const AppState &state) const {
     return false;
   }
   bool expired = (modeState(state)._startMillis + _maxDuration) <= state.millis();
-  Log.Debug("%s expiry=%d vs %d %s\n", name(), (modeState(state)._startMillis + _maxDuration), state.millis(), expired ? "EXPIRED" : "OK");
+  // Log.Debug("%s expiry=%d vs %d %s\n", name(), (modeState(state)._startMillis + _maxDuration), state.millis(), expired ? "EXPIRED" : "OK");
   return expired;
 }
 
@@ -121,6 +121,26 @@ bool Mode::persistent(const AppState &state) const {
     // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
   }
   return persist;
+}
+
+bool Mode::inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const {
+  if (!requiredState(state)) {
+    return false;
+  }
+  if (_followMode==NULL) {
+    // Not following...
+    {
+      return (parentActivation==ActivationIdleCell
+            ||  parentActivation==ActivationInspiring // Parent just activated
+            || ((parentActivation==ActivationActive || parentActivation==ActivationSustaining)
+                && inspired(state, oldState))); // Required just became true
+    }
+  }
+  else {
+    // Following...
+    return    (!_followMode->isActive(state) && _followMode->isActive(oldState)) // Prior terminated
+          &&  (parentActivation==ActivationInspiring || parentActivation==ActivationActive || parentActivation==ActivationSustaining);
+  }
 }
 
 ActivationType Mode::activation(const AppState &state, const AppState &oldState) const {
@@ -185,12 +205,12 @@ bool Mode::terminate(AppState &state) {
 uint8_t Mode::decSupportiveParents(const AppState &state) {
   if (state.changeCounter()!=_supportiveFrame) {
     // assert(0 < _countParents);
-    Log.Debug("Resetting parents to %d\n", (int)_countParents);
+    // Log.Debug("Resetting parents to %d\n", (int)_countParents);
     _supportiveParents = _countParents;
     _supportiveFrame = state.changeCounter();
   }
   --_supportiveParents;
-  Log.Debug("Remaining supportive parents = %d\n", (int)_supportiveParents);
+  // Log.Debug("Remaining supportive parents = %d\n", (int)_supportiveParents);
   return _supportiveParents;
 }
 
@@ -306,6 +326,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
         || invocationTerminated(state, oldState)
         || !requiredState(state)) {
       // Regardless of other parents, this cell cannot be active.
+      // Log.Debug("%s: expired: %T, invocationTerminated: %T, !required: %T\n", name(), expired(state), invocationTerminated(state, oldState), !requiredState(state));
       terminate(state);
     }
     else if (parentActivation==ActivationExpiring || parentActivation==ActivationInactive) {
@@ -323,15 +344,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   else {
     // Not active. Should activate?
     assert(!(parentActivation==ActivationIdleCell && _followMode!=NULL)); // We don't currently support idleModes that are also followers.
-    if ((_followMode==NULL
-          && (parentActivation==ActivationIdleCell
-          || (parentActivation==ActivationInspiring && requiredState(state))
-          || (parentActivation==ActivationActive && requiredState(state) && !requiredState(oldState))))
-        || (_followMode!=NULL
-          && !_followMode->isActive(state) && _followMode->isActive(oldState) // Prior terminated
-          && requiredState(state)
-          && (parentActivation==ActivationInspiring || parentActivation==ActivationActive || ActivationSustaining)
-          )) {
+    if (inspiring(parentActivation, state, oldState)) {
       // Either parent activation or requiredState (or both) just transitioned to true.
       if (parentActivation==ActivationInspiring) {
         reset(state); // Reset invocation count. We're in a fresh parent!
@@ -341,16 +354,19 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
 
   ActivationType myActivation = activation(state, oldState);
+  bool active = false;
   if (isActive(state)) { // Yes, re-call isActive because it may have changed above
-    return propagateActive(parentActivation, myActivation, state, oldState);
+    active = propagateActive(parentActivation, myActivation, state, oldState);
   }
   else {
     // We don't care about barren & idle processing if we're not active - they all get shut down
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       (*m)->propagate(myActivation, state, oldState);
     }
-    return false;
+    active = false;
   }
+  // Log.Debug("Leaving propagate: %s active: %T\n", name(), active);
+  return active;
 }
 
 void Executor::exec(ActionFn listener, const AppState &state, const AppState &oldState, Mode *triggeringMode) {

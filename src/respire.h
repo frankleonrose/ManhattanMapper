@@ -112,7 +112,7 @@ class Mode {
     uint8_t _childActivationLimit = 0;
     uint8_t _childSimultaneousLimit = 0;
 
-    StateModFn _inspirationFn = NULL;
+    StateModFn _inspirationPred = NULL;
     ActionFn _invokeFunction = NULL;
     StatePredicate _requiredPred = NULL;
 
@@ -172,8 +172,8 @@ class Mode {
       _childSimultaneousLimit = childSimultaneousLimit;
       return *this;
     }
-    Builder &inspirationFn(StateModFn inspirationFn) {
-      _inspirationFn = inspirationFn;
+    Builder &inspirationPred(StateModFn inspirationPred) {
+      _inspirationPred = inspirationPred;
       return *this;
     }
     Builder &invokeFn(ActionFn invokeFunction) {
@@ -190,6 +190,7 @@ class Mode {
 
   uint8_t _stateIndex = STATE_INDEX_INITIAL;
 
+  public: // All const. No worries.
   const char * const _name;
   const uint8_t _repeatLimit = 0;
 
@@ -206,10 +207,11 @@ class Mode {
   const uint8_t _childActivationLimit = 0;
   const uint8_t _childSimultaneousLimit = 0;
 
-  const StateModFn _inspirationFn = NULL;
+  const StateModFn _inspirationPred = NULL;
   const ActionFn _invokeFunction = NULL;
   const StatePredicate _requiredPred = NULL;
 
+  private:
   uint8_t _countParents = 0;
   uint8_t _supportiveParents = 0;
   uint32_t _supportiveFrame = 0; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
@@ -244,10 +246,15 @@ class Mode {
   }
 
   bool requiredState(const AppState &state) const {
-    if (_requiredPred==NULL) {
+    if (!_requiredPred) {
       return true;
     }
     return _requiredPred(state);
+  }
+
+  bool inspired(const AppState &state, const AppState &oldState) const {
+    return (_inspirationPred && _inspirationPred(state, oldState))
+          || (requiredState(state) && !requiredState(oldState));
   }
 
   ActionFn invokeFunction() const {
@@ -301,6 +308,8 @@ class Mode {
 
   bool triggered(const AppState &state) const;
 
+  bool inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const;
+
   void dump(const AppState &state) const {
     Log.Debug("Mode: \"%20s\" [%8s][%7s] parents=%d", _name,
       (isActive(state) ? "Active" : "Inactive"),
@@ -348,10 +357,12 @@ class RespireStateBase {
   }
 
   ModeState &modeState(const uint8_t stateIndex) {
+    assert(stateIndex!=STATE_INDEX_INITIAL);
     return _modeStates[stateIndex];
   }
 
   const ModeState &modeState(const uint8_t stateIndex) const {
+    assert(stateIndex!=STATE_INDEX_INITIAL);
     return _modeStates[stateIndex];
   }
 
@@ -452,7 +463,7 @@ class RespireContext {
 
     // Main is always active
     _modeMain.activate(_appState);
-    // ModeMain.dump(_appState);
+    // _modeMain.dump(_appState);
 
     TAppState reference; // Initial rev to compare to
     // reference.dump();
@@ -531,7 +542,7 @@ class RespireContext {
       performActions(oldState);
     }
 
-    _appState.dump();
+    // _appState.dump();
   }
 
   void performActions(const TAppState &oldState) {
