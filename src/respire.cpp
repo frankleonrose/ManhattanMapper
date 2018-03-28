@@ -7,6 +7,7 @@ Mode::Mode(const Builder &builder)
   _minDuration(builder._minDuration),
   _maxDuration(builder._maxDuration),
   _minGapDuration(builder._minGapDuration),
+  _invokeDelay(builder._invokeDelay),
   _perTimes(builder._perTimes),
   _perUnit(builder._perUnit),
   _idleMode(builder._idleMode),
@@ -80,6 +81,10 @@ bool Mode::triggered(const AppState &state) const {
     // Not active. Now way to trigger.
     return false;
   }
+  if (_invokeDelay) {
+    // Log.Debug("InvokeDelay triggers %T\n", (modeState(state)._startMillis + _invokeDelay) <= state.millis());
+    return (modeState(state)._startMillis + _invokeDelay) <= state.millis();
+  }
   if (_perUnit==TimeUnitNone) {
     // No period.
     return false;
@@ -104,6 +109,7 @@ bool Mode::persistent(const AppState &state) const {
   bool persist = false;
   if (_invokeFunction!=NULL) {
     // We started an external function and we stick around until it is done.
+    // (invokeDelay'd modes will fall in here, too. _invocationActive is set true at inspiration.)
     persist |= modeState(state)._invocationActive;
   }
   if (_minDuration!=0) {
@@ -182,6 +188,7 @@ bool Mode::activate(AppState &state) {
   modeState(state)._childInspirationCount = 0;
   if (_invokeFunction!=NULL) {
     modeState(state)._invocationActive = true;
+    modeState(state)._lastTriggerMillis = 0;
   }
   // Log.Debug("Done %u\n", modeState(state)._invocationCount);
   return true;

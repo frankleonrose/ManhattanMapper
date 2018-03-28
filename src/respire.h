@@ -102,6 +102,7 @@ class Mode {
     uint32_t _minDuration = 0;
     uint32_t _maxDuration = 0;
     uint32_t _minGapDuration = 0;
+    uint32_t _invokeDelay = 0;
 
     uint16_t _perTimes = 0;
     TimeUnit _perUnit = TimeUnitNone;
@@ -138,6 +139,10 @@ class Mode {
     }
     Builder &minGapDuration(uint32_t minGapDuration) {
       _minGapDuration = minGapDuration;
+      return *this;
+    }
+    Builder &invokeDelay(uint32_t invokeDelay) {
+      _invokeDelay = invokeDelay;
       return *this;
     }
     Builder &periodic(uint16_t times, TimeUnit perUnit) {
@@ -197,6 +202,7 @@ class Mode {
   const uint32_t _minDuration = 0;
   const uint32_t _maxDuration = 0;
   const uint32_t _minGapDuration = 0;
+  const uint32_t _invokeDelay = 0;
 
   const uint16_t _perTimes = 0;
   const TimeUnit _perUnit = TimeUnitNone;
@@ -235,7 +241,7 @@ class Mode {
         invokeModes.push_back(this);
       }
     }
-    if (_perUnit!=TimeUnitNone || _maxDuration!=0) {
+    if (_perUnit!=TimeUnitNone || _maxDuration!=0 || _minDuration || _invokeDelay) {
       if (std::find(timeDependentModes.begin(), timeDependentModes.end(), this) == timeDependentModes.end()) {
         timeDependentModes.push_back(this);
       }
@@ -259,6 +265,10 @@ class Mode {
 
   ActionFn invokeFunction() const {
     return _invokeFunction;
+  }
+
+  uint32_t invokeDelay() const {
+    return _invokeDelay;
   }
 
   bool persistent(const AppState &state) const;
@@ -550,7 +560,16 @@ class RespireContext {
 
     for (auto m = _invokeModes.begin(); m!=_invokeModes.end(); ++m) {
       auto mode = *m;
-      if (mode->isActive(_appState) && !mode->isActive(oldState)) {
+      bool invoke = false;
+      if (mode->invokeDelay()==0) {
+        // Just inspired. Invoke immediately.
+        invoke = mode->isActive(_appState) && !mode->isActive(oldState);
+      }
+      else {
+        // triggered() checks for delay passed and propagate sets lastTriggerMillis to current when triggered.
+        invoke = _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
+      }
+      if (invoke) {
         // printf("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);
       }
