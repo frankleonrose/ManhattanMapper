@@ -6,6 +6,8 @@
 #include <Arduino.h>
 #include <Logging.h>
 #include <Adafruit_ZeroTimer.h>
+#include <ParameterStore.h> // For htonl htons
+
 #include "gps.h"
 
 #define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
@@ -59,7 +61,7 @@ bool gpsHasFix() {
 }
 
 void gpsEnable(bool enable) {
-  Log.Debug("Setting GPS enable: %T", enable);
+  Log.Debug("Setting GPS enable: %T\n", enable);
   digitalWrite(GPS_ENABLE_PIN, !enable);
 }
 
@@ -82,7 +84,8 @@ void gpsSetup()
   // For the parsing code to work nicely and have time to sort thru the data, and
   // print it out we don't suggest using anything higher than 1 Hz
 
-  // Request updates on antenna status, comment out to keep quiet
+  // Request updates on antenna status or explicitly not
+  // GPS.sendCommand(PGCMD_ANTENNA);
   GPS.sendCommand(PGCMD_NOANTENNA);
 
   delay(1000);
@@ -182,6 +185,26 @@ void gpsDump(Print &printer) {
     printer.print("Altitude: "); printer.println(GPS.altitude);
     printer.print("Satellites: "); printer.println((int)GPS.satellites);
   }
+}
+
+uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
+  int32_t lat = _latitude * 46603;  // Expand +/-180 coordinate to fill 24bits
+  uint32_t ulat = lat < 0 ? (UINT32_MAX-(uint32_t)(-lat)+1) : (uint32_t)(lat);
+  ulat = htonl(ulat);
+  int32_t lon = _longitude * 93206; // Expand +/-90 coordinate to fill 24bits
+  uint32_t ulon = lon < 0 ? (UINT32_MAX-(uint32_t)(-lon)+1) : (uint32_t)(lon);
+  ulon = htonl(ulon);
+  int16_t alt = _altitude;
+  alt = htons(alt);
+  int16_t hdop = _HDOP * 1000;
+  hdop = htons(hdop);
+
+  memcpy(packet + 0, &ulat, 3); // 24 bit
+  memcpy(packet + 3, &ulon, 3); // 24 bit
+  memcpy(packet + 6,  &alt, 2);
+  memcpy(packet + 8, &hdop, 2);
+
+  return 10;
 }
 
 #endif

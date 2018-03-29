@@ -195,26 +195,6 @@ uint8_t readVoltageLevel(uint16_t pin) {
     return (uint8_t)level;
 }
 
-uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
-  int32_t lat = _latitude * 46603;  // Expand +/-180 coordinate to fill 24bits
-  uint32_t ulat = lat < 0 ? (UINT32_MAX-(uint32_t)(-lat)+1) : (uint32_t)(lat);
-  ulat = htonl(ulat);
-  int32_t lon = _longitude * 93206; // Expand +/-90 coordinate to fill 24bits
-  uint32_t ulon = lon < 0 ? (UINT32_MAX-(uint32_t)(-lon)+1) : (uint32_t)(lon);
-  ulon = htonl(ulon);
-  int16_t alt = _altitude;
-  alt = htons(alt);
-  int16_t hdop = _HDOP * 1000;
-  hdop = htons(hdop);
-
-  memcpy(packet + 0, &ulat, 3); // 24 bit
-  memcpy(packet + 3, &ulon, 3); // 24 bit
-  memcpy(packet + 6,  &alt, 2);
-  memcpy(packet + 8, &hdop, 2);
-
-  return 10;
-}
-
 bool do_send(const AppState &state, const bool withAck) {
     // Check if there is not a current TX/RX job running
     // if (LMIC.opmode & OP_TXRXPEND) {
