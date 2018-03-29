@@ -173,11 +173,17 @@ void onReceive(const uint8_t *payload, size_t size, port_t port) {
 }
 
 uint8_t readVoltageLevel(uint16_t pin) {
-    float measuredvbat = analogRead(pin);
+    float measuredvbat;
+    if (pin==VBATPIN) {
+      measuredvbat = uiReadSharedVbatPin(pin);
+    }
+    else {
+      measuredvbat = analogRead(pin);
+    }
     measuredvbat *= 2;    // we divided by 2, so multiply back
     measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
     measuredvbat /= 1024; // convert to voltage
-    // Log.Debug("Voltage at %d: %f", (int)pin, measuredvbat);
+    // Log.Debug("Voltage at %d: %f\n", (int)pin, measuredvbat);
 
     // Normalize to 0-100
     const float minv = 2.7;

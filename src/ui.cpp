@@ -25,6 +25,7 @@ static volatile bool gButtonB = false;
 static volatile bool gButtonC = false;
 
 #define DEBOUNCE_MASK 0xE0000000
+static volatile bool ignoreA = false;
 
 void ISR_TC3_readButtons(struct tc_module *const module_inst) {
   // static bool ledFlash = false;
@@ -33,8 +34,10 @@ void ISR_TC3_readButtons(struct tc_module *const module_inst) {
   // Thanks, http://www.eng.utah.edu/~cs5780/debouncing.pdf "A Guide to Debouncing" by Jack Ganssle section: "An Alternative"
   // Basically, gButtonX is set only after a quiet stream of 25 LOW values have come in. At 2ms sample rate that allows ~50ms detect time.
   static uint32_t debounceA = 0, debounceB = 0, debounceC = 0;
-  debounceA = (debounceA << 1) | digitalRead(BUTTON_A_PIN) | DEBOUNCE_MASK;
-  gButtonA = debounceA == DEBOUNCE_MASK;
+  if (!ignoreA) {
+    debounceA = (debounceA << 1) | digitalRead(BUTTON_A_PIN) | DEBOUNCE_MASK;
+    gButtonA = debounceA == DEBOUNCE_MASK;
+  }
   debounceB = (debounceB << 1) | digitalRead(BUTTON_B_PIN) | DEBOUNCE_MASK;
   gButtonB = debounceB == DEBOUNCE_MASK;
   debounceC = (debounceC << 1) | digitalRead(BUTTON_C_PIN) | DEBOUNCE_MASK;
@@ -43,6 +46,24 @@ void ISR_TC3_readButtons(struct tc_module *const module_inst) {
 
 static Adafruit_ZeroTimer uiButtonTimer = Adafruit_ZeroTimer(3);
 
+float uiReadSharedVbatPin(int pin) {
+  // Shared bin with OLED button A. Gotta read and then give it back.
+  assert(pin==BUTTON_A_PIN);
+
+  // uiButtonTimer.enable(false);
+  ignoreA = true;
+
+  pinMode(pin, INPUT);
+  delayMicroseconds(500); // Wait analog signal to settle.
+
+  float val = analogRead(pin);
+
+  pinMode(pin, INPUT_PULLUP);
+  // uiButtonTimer.enable(true);
+  ignoreA = false;
+
+  return val;
+}
 void uiSetup() {
   pinMode(BUTTON_A_PIN, INPUT_PULLUP);
   pinMode(BUTTON_B_PIN, INPUT_PULLUP);
