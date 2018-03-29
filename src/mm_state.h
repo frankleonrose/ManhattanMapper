@@ -114,6 +114,9 @@ class AppState : public RespireState<AppState> {
   // Display states
   uint8_t _page = 0;
   uint8_t _field = 0;
+  bool _buttonPage = false;
+  bool _buttonField = false;
+  bool _buttonChange = false;
 
   // Dependent state - no setters
   bool _joined = false;
@@ -132,6 +135,9 @@ class AppState : public RespireState<AppState> {
     _gpsSampleExpiry(otherState._gpsSampleExpiry),
     _page(otherState._page),
     _field(otherState._field),
+    _buttonPage(otherState._buttonPage),
+    _buttonField(otherState._buttonField),
+    _buttonChange(otherState._buttonChange),
     _joined(otherState._joined),
     _gpsPowerOut(otherState._gpsPowerOut)
   {}
@@ -235,6 +241,48 @@ class AppState : public RespireState<AppState> {
     }
     AppState oldState(*this);
     _field = field;
+    onUpdate(oldState);
+  }
+
+  bool buttonPage() const {
+    return _buttonPage;
+  }
+
+  void buttonPage(bool btn) {
+    if (_buttonPage == btn) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _buttonPage = btn;
+    onUpdate(oldState);
+  }
+
+  bool buttonField() const {
+    return _buttonField;
+  }
+
+  void buttonField(bool btn) {
+    if (_buttonField == btn) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _buttonField = btn;
+    onUpdate(oldState);
+  }
+
+  bool buttonChange() const {
+    return _buttonChange;
+  }
+
+  void buttonChange(bool btn) {
+    if (_buttonChange == btn) {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _buttonChange = btn;
     onUpdate(oldState);
   }
 

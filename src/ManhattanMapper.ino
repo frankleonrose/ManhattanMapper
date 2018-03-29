@@ -254,6 +254,9 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
+    Log.Debug(F("Setup UI" CR));
+    uiSetup();
+
     Serial.begin(115200);
     Log.Init(LOGLEVEL, Serial);
     // Wait for 15 seconds. If no Serial by then, keep going. We are not connected.
@@ -355,6 +358,7 @@ void setup() {
 void loop() {
   // Log.Debug(F("os_runloop_once" CR));
   lorawan.loop();
+  uiLoop();
 
   if (!ModeSend.isActive(gState)) {
     // Don't do parsing or timer optional things that could throw off LoRa timing.
@@ -476,22 +480,6 @@ void sendLocationAck(const AppState &state, const AppState &oldState, Mode *trig
   else {
 
   }
-}
-
-void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  Log.Debug("displayBlank\n");
-}
-
-void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  Log.Debug("displayStatus\n");
-}
-
-void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  Log.Debug("displayParameters\n");
-}
-
-void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  Log.Debug("displayErrors\n");
 }
 
 #endif
