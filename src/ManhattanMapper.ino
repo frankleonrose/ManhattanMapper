@@ -45,6 +45,8 @@
 #include <Timer.h>
 
 #include "gps.h"
+#include "storage.h"
+#include "ui.h"
 
 // #define LOGLEVEL LOG_LEVEL_DEBUG //  _NOOUTPUT, _ERRORS, _WARNINGS, _INFOS, _DEBUG, _VERBOSE
 
@@ -128,6 +130,7 @@ void onEvent(void *ctx, uint32_t event) {
             break;
         case EV_JOINED:
             Log.Debug(F("EV_JOINED" CR));
+            writeParametersToSD(pstore);
             gRespire.complete(ModeAttemptJoin, [](AppState &state){
               state.setJoined(true);
             });
@@ -409,55 +412,6 @@ void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeri
 void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Enter or exit Sleep state
   Log.Debug("Entering sleep mode...\n");
-}
-
-bool makePath(char *filename) {
-  bool success = true;
-  for (char *sep = filename; success && (sep = strstr(sep, "/"))!=NULL; ++sep) {
-    if (sep==filename) {
-      continue; // No need to create root path /
-    }
-    *sep = '\0'; // Terminate at separator
-    if (!SD.exists(filename)) {
-      // Create if doesn't exist
-      Log.Debug("Path \"%s\" does not exist\n", filename);
-      if (!SD.mkdir(filename)) {
-        Log.Error("Failed to create path \"%s\"\n", filename);
-        success = false;
-      }
-    }
-    *sep = '/'; // Restore separator and check next path segment Ok
-  }
-  return true;
-}
-
-void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
-  char filename[300];
-  const GpsSample &gps = state.gpsSample();
-
-  sprintf(filename, "/gps/%04d/%02d/%02d/%02d.csv", (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour);
-  if (!makePath(filename)) {
-    Log.Error("Failed to makePath %s\n", filename);
-    gRespire.complete(triggeringMode);
-    return;
-  }
-
-  char dataString[300];
-  sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,battery,frame", // TODO frame & battery
-        (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
-        gps._latitude, gps._longitude, gps._altitude, gps._HDOP /*, state.ttnFrameUp(), state.batteryLevel() */);
-
-  Log.Debug("Writing \"%s\" to file \"%s\"\n", dataString, filename);
-
-  File dataFile = SD.open(filename, FILE_WRITE);
-  if (dataFile) {
-    dataFile.println(dataString);
-    dataFile.close();
-  }
-  else {
-    Log.Error("Error opening %s\n", triggeringMode->name());
-  }
-  gRespire.complete(triggeringMode);
 }
 
 void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
