@@ -28,7 +28,7 @@ static volatile bool gpsHasFixStatus = false;
 static uint8_t gpsFixIndex = 0;
 static bool gpsFixHistory[5];
 static Adafruit_ZeroTimer gpsFixTimer = Adafruit_ZeroTimer(4);
-static bool ledFlash = false;
+
 void gpsFixISR(struct tc_module *const module_inst) {
   // Used to distinguish between 2 signals
   // No GPS Fix: ____----____----____----____----____----____----         (1s low, 1s high)
@@ -41,7 +41,8 @@ void gpsFixISR(struct tc_module *const module_inst) {
   //   I choose 350ms to give a little wiggle room. The GPS clock is ns accurate, but our mcu timer is not.
   //   Worst case, it'll take 5 * 350ms (1.75s) to figure out we lost fix. 1s to figure out we acheived fix.
 
-  digitalWrite(LED_BUILTIN, (ledFlash = !ledFlash));
+  // static bool ledFlash = false;
+  // digitalWrite(LED_BUILTIN, (ledFlash = !ledFlash));
 
   bool sample = digitalRead(GPS_FIX_PIN);
   gpsFixHistory[gpsFixIndex] = sample;
@@ -106,14 +107,13 @@ void gpsSetup()
 
   Log.Debug("gpsSetup setup fix timer\n");
 
-  /********************* Timer #4, 8 bit, one callback with adjustable period = 350KHz ~ 2.86us for DAC updates */
-  gpsFixTimer.configure(TC_CLOCK_PRESCALER_DIV64, // prescaler: 48000(m0 clock freq) / 64(prescaler) = 750kHz
-                TC_COUNTER_SIZE_32BIT,            // bit width of timer/counter
+  gpsFixTimer.configure(TC_CLOCK_PRESCALER_DIV1024, // prescaler: 48000(m0 clock freq) / 1024(prescaler) = 46.875kHz
+                TC_COUNTER_SIZE_16BIT,            // bit width of timer/counter (avoid 32 bit because that uses two timers!)
                 TC_WAVE_GENERATION_MATCH_FREQ     // match style
                 );
 
-  gpsFixTimer.setPeriodMatch(262500, 1, 0); // 350ms period = 2.857Hz = 750k / 262500, 1 match, 0 channel
-  gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);  // set DAC in the callback
+  gpsFixTimer.setPeriodMatch(16406, 1, 0); // 350ms period = 2.857Hz = 46.875k / 16406, 1 match, 0 channel
+  gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);
   Log.Debug("gpsSetup enable fix timer\n");
   gpsFixTimer.enable(true);
   Log.Debug("gpsSetup done\n");
