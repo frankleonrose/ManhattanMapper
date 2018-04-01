@@ -344,6 +344,8 @@ class Mode {
     if (_children.size()>0) Log.Debug_(" childInspirations: %d [limit %d],", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
     if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
     if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", modeState(state)._invocationActive ? "Running" : "Not running");
+    if (_invokeDelay!=0) Log.Debug_(" invokeDelay: %d,", (int)_invokeDelay);
+    if (_invokeDelay!=0 && modeState(state)._invocationActive)  Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
     Log.Debug_("\n");
 
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
