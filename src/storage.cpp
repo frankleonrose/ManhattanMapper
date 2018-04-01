@@ -1,16 +1,28 @@
 #include <Arduino.h>
-#include <SD.h>
+#include <SPI.h>
+#include <SdFat.h>
 #include <ParameterStore.h>
 #include <Logging.h>
 #include "mm_state.h"
 
+#define SD_CARD_CS 10
+
 extern AppState gState;
 extern RespireContext<AppState> gRespire;
+static bool gSDAvailable = false;
 
 static char *kParamFile = "params.ini";
 
+// https://learn.adafruit.com/using-atsamd21-sercom-to-add-more-spi-i2c-serial-ports/creating-a-new-spi
+// http://asf.atmel.com/docs/3.27.0/samd21/html/asfdoc_sam0_sercom_spi_mux_settings.html
+// 13 - clock (3:1), 12 - MOSI (3:3), 11 - MISO (3:0)
+SPIClass MM_SD_SPI (&sercom3, 11 /*MISO*/, 13/*CLK*/, 12/*MOSI*/, SPI_PAD_3_SCK_1, SERCOM_RX_PAD_0);
+// Hooked into SdFat by -DSDCARD_SPI=MM_SD_SPI and `extern SPIClass MM_SD_SPI;` statement in SdSpiDriver.h
+
+SdFat SD;
+
 bool readParametersFromSD(ParameterStore &pstore) {
-  if (SD.exists(kParamFile)) {
+  if (gSDAvailable && SD.exists(kParamFile)) {
     File file = SD.open(kParamFile, FILE_READ);
     if (file) {
       size_t size = file.size();
@@ -35,19 +47,23 @@ bool readParametersFromSD(ParameterStore &pstore) {
     }
   }
   else {
-    Log.Debug("No parameter file '%s' to read.", kParamFile);
+    Log.Debug("No parameter file '%s' to read.\n", kParamFile);
     return true;
   }
 }
 
 bool writeParametersToSD(ParameterStore &pstore) {
+  if (!gSDAvailable) {
+    return false;
+  }
+
   SD.remove(kParamFile); // TODO: Should perform write to dummy followed by rename to actual one. Alternatively, alternate writing to different ones.
 
   char buffer[2000];
   int size = pstore.serialize(buffer, sizeof(buffer));
 
   if (size<0) {
-    Log.Error(F("Failed to serialize parameter store."));
+    Log.Error(F("Failed to serialize parameter store.\n"));
     return false;
   }
 
@@ -88,6 +104,12 @@ bool makePath(char *filename) {
 }
 
 void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+  if (!gSDAvailable) {
+    Log.Debug("Completing %s\n", triggeringMode->name());
+    gRespire.complete(triggeringMode);
+    return;
+  }
+
   char filename[300];
   const GpsSample &gps = state.gpsSample();
 
@@ -116,7 +138,18 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
   else {
     Log.Error("Error opening %s\n", triggeringMode->name());
   }
-  Log.Debug("Completing %s\n", filename);
+  Log.Debug("Completing %s\n", triggeringMode->name());
   gRespire.complete(triggeringMode);
 }
 
+void storageSetup() {
+  if (!SD.begin(SD_CARD_CS, SPISettings(1000000, MSBFIRST, SPI_MODE0))) {
+    Log.Error("Card failed or not present\n");
+    // while (1);
+    gSDAvailable = false;
+  }
+  else {
+    Log.Debug("SD card interface initialized.\n");
+    gSDAvailable = true;
+  }
+}

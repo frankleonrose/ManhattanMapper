@@ -32,7 +32,6 @@
  *******************************************************************************/
 
 #include <SPI.h>
-#include <SD.h>
 
 #include <Adafruit_GPS.h>
 #include <Arduino_LoRaWAN_ttn.h>
@@ -78,7 +77,6 @@ static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 #define VBATPIN A7
 #define VUSBPIN A1
 
-#define SD_CARD_CS 10
 #define LORA_CS 8
 const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
 // Feather LoRa wiring (with IO1 <--> GPIO#6)
@@ -109,6 +107,7 @@ void onEvent(void *ctx, uint32_t event) {
         state.transmittedFrame(LMIC.seqnoUp);
       });
     }
+    writeParametersToSD(pstore);
     digitalWrite(LED_BUILTIN, LOW);
   }
   else {
@@ -130,6 +129,7 @@ void onEvent(void *ctx, uint32_t event) {
             break;
         case EV_JOINED:
             Log.Debug(F("EV_JOINED" CR));
+            Log.Debug(F("Writing parameters to SD card\n"));
             writeParametersToSD(pstore);
             gRespire.complete(ModeAttemptJoin, [](AppState &state){
               state.setJoined(true);
@@ -260,13 +260,8 @@ void setup() {
     pinMode(LORA_CS, OUTPUT);
     digitalWrite(LORA_CS, HIGH); // Default, unselected
 
-    if (!SD.begin(SD_CARD_CS)) {
-      Log.Error("Card failed or not present\n");
-      while (1);
-    }
-    else {
-      Log.Debug("SD card interface initialized.\n");
-    }
+    Log.Debug("Storage setup\n");
+    storageSetup();
 
     Log.Debug(F("Connecting to storage!" CR));
     bool status = byteStore.begin();
@@ -281,6 +276,7 @@ void setup() {
         while (1);
     }
     // pstore.set("FCNTUP", SEQ_NO_20180213);
+    readParametersFromSD(pstore);
 
     Log.Debug(F("Setting lorawan debug mask." CR));
     lorawan.SetDebugMask(Arduino_LoRaWAN::LOG_BASIC | Arduino_LoRaWAN::LOG_ERRORS | Arduino_LoRaWAN::LOG_VERBOSE);
