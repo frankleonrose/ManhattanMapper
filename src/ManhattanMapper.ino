@@ -230,10 +230,6 @@ bool do_send(const AppState &state, const bool withAck) {
     }
 }
 
-void dumpGps() {
-  // gpsDump(Serial);
-}
-
 void setup() {
     //  attachInterrupt(A0, onA0Change, CHANGE);
 
@@ -254,9 +250,10 @@ void setup() {
     }
     Log.Debug(F("Starting" CR));
 
-    Log.Debug("Writing default value to NSS: %d", LORA_CS);
-    // digitalWrite(FRAM_CS, HIGH); // Default, unselected
-    // pinMode(FRAM_CS, OUTPUT);
+    Log.Debug(F("Setup GPS" CR));
+    gpsSetup();
+
+    Log.Debug("Writing default value to NSS: %d\n", LORA_CS);
     pinMode(LORA_CS, OUTPUT);
     digitalWrite(LORA_CS, HIGH); // Default, unselected
 
@@ -317,7 +314,10 @@ void setup() {
     // Log.Debug(F("LMIC_setDrTxpow" CR));
     // LMIC_setDrTxpow(DR_SF7, 14);
 
-    gTimer.every(10 * 1000, dumpGps);
+    gTimer.every(10 * 1000, [](){
+      // gpsDump(Serial);
+      gState.dump();
+    });
     gTimer.every(1000, []() {
       readVoltageLevel(VBATPIN);
     });
@@ -326,9 +326,6 @@ void setup() {
         readVoltageLevel(VUSBPIN);
       });
     });
-
-    Log.Debug(F("Setup GPS" CR));
-    gpsSetup();
 
     Log.Debug(F("Setup Respire" CR));
     gRespire.init();
@@ -368,7 +365,7 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
 
 void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Only called when changed, so just apply value.
-  Log.Debug("Setting GPS power: %d", state.getGpsPower());
+  Log.Debug("Setting GPS power: %d\n", state.getGpsPower());
   gpsEnable(state.getGpsPower());
 }
 

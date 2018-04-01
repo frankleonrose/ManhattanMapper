@@ -12,8 +12,8 @@
 
 #define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
 
-#define GPS_FIX_PIN 12
-#define GPS_ENABLE_PIN 11
+#define GPS_FIX_PIN 18
+#define GPS_ENABLE_PIN 19
 
 HardwareSerial &gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
@@ -61,15 +61,15 @@ bool gpsHasFix() {
   return gpsHasFixStatus;
 }
 
-void gpsEnable(bool enable) {
-  Log.Debug("Setting GPS enable: %T\n", enable);
-  digitalWrite(GPS_ENABLE_PIN, !enable);
+static void gpsFixHistoryInit() {
+  gpsHasFixStatus = false;
+  gpsFixIndex = 0;
+  for (uint8_t i=0; i<ELEMENTS(gpsFixHistory); ++i) {
+    gpsFixHistory[i] = true;
+  }
 }
 
-void gpsSetup()
-{
-
-  Log.Debug("gpsSetup begin\n");
+static void gpsInit() {
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
   GPS.begin(9600);
 
@@ -93,20 +93,35 @@ void gpsSetup()
   // Ask for firmware version
   GPS.sendCommand(PMTK_Q_RELEASE);
 
+  Log.Debug("gpsInit enable fix timer\n");
+  gpsFixHistoryInit();
 
-  pinMode(GPS_ENABLE_PIN, OUTPUT);
-  digitalWrite(GPS_ENABLE_PIN, HIGH); // Disabled initially
+  gpsFixTimer.enable(true);
+}
+
+void gpsEnable(bool enable) {
+  Log.Debug("Setting GPS enable: %T\n", enable);
+  digitalWrite(GPS_ENABLE_PIN, !enable);
+  if (enable) {
+    delay(500); // Wait for GPS to wake up. TODO how long?
+    gpsInit();
+  }
+  else {
+    gpsFixHistoryInit();
+    gpsFixTimer.enable(false);
+  }
+}
+
+void gpsSetup()
+{
+
+  Log.Debug("gpsSetup begin\n");
 
   pinMode(GPS_FIX_PIN, INPUT);
-
-  gpsHasFixStatus = false;
-  gpsFixIndex = 0;
-  for (uint8_t i=0; i<ELEMENTS(gpsFixHistory); ++i) {
-    gpsFixHistory[i] = false;
-  }
+  pinMode(GPS_ENABLE_PIN, OUTPUT);
+  digitalWrite(GPS_ENABLE_PIN, LOW); // Disabled initially
 
   Log.Debug("gpsSetup setup fix timer\n");
-
   gpsFixTimer.configure(TC_CLOCK_PRESCALER_DIV1024, // prescaler: 48000(m0 clock freq) / 1024(prescaler) = 46.875kHz
                 TC_COUNTER_SIZE_16BIT,            // bit width of timer/counter (avoid 32 bit because that uses two timers!)
                 TC_WAVE_GENERATION_MATCH_FREQ     // match style
@@ -114,8 +129,11 @@ void gpsSetup()
 
   gpsFixTimer.setPeriodMatch(16406, 1, 0); // 350ms period = 2.857Hz = 46.875k / 16406, 1 match, 0 channel
   gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);
-  Log.Debug("gpsSetup enable fix timer\n");
-  gpsFixTimer.enable(true);
+  gpsFixTimer.enable(false);
+
+  gpsFixHistoryInit();
+  // gpsInit(); // Should happen only on enable
+
   Log.Debug("gpsSetup done\n");
 }
 
@@ -157,7 +175,7 @@ void gpsRead(std::function< void(const GpsSample &gpsSample) > success, std::fun
 }
 
 void gpsDump(Print &printer) {
-  printer.print("Date: 20");
+  printer.print(F("Date: 20"));
   printer.print(GPS.year, DEC); printer.print('-');
   printer.print(GPS.month, DEC); printer.print('-');
   printer.println(GPS.day, DEC);
