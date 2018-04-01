@@ -31,6 +31,8 @@
  *
  *******************************************************************************/
 
+#ifndef UNIT_TEST
+
 #include <SPI.h>
 
 #include <Adafruit_GPS.h>
@@ -39,10 +41,9 @@
 #include <ParameterStore.h>
 #include <RamStore.h>
 #include <LoraStack.h>
-#include "mm_state.h"
-
 #include <Timer.h>
 
+#include "mm_state.h"
 #include "gps.h"
 #include "storage.h"
 #include "ui.h"
@@ -83,7 +84,7 @@ const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
     .nss = LORA_CS,
     .rxtx = LMIC_UNUSED_PIN,
     .rst = 4,
-    .dio = {3, 6, LMIC_UNUSED_PIN},
+    .dio = {3, 17, LMIC_UNUSED_PIN},
 };
 
 const int STORE_SIZE = 2000;
@@ -239,9 +240,6 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
-    Log.Debug(F("Setup UI" CR));
-    uiSetup();
-
     Serial.begin(115200);
     Log.Init(LOGLEVEL, Serial);
     // Wait for 15 seconds. If no Serial by then, keep going. We are not connected.
@@ -252,6 +250,13 @@ void setup() {
 
     Log.Debug(F("Setup GPS" CR));
     gpsSetup();
+
+    Log.Debug(F("Setup Respire" CR));
+    gRespire.init(); // No actions are performed until begin() call below.
+    gState.setUsbPower(true);
+
+    Log.Debug(F("Setup UI" CR));
+    uiSetup();
 
     Log.Debug("Writing default value to NSS: %d\n", LORA_CS);
     pinMode(LORA_CS, OUTPUT);
@@ -327,10 +332,7 @@ void setup() {
       });
     });
 
-    Log.Debug(F("Setup Respire" CR));
-    gRespire.init();
-    gState.setUsbPower(true);
-    gState.setGpsFix(true);
+    Log.Debug(F("Begin Respire" CR));
     gRespire.begin();
     gState.dump();
 
@@ -397,22 +399,20 @@ void sendLocation(const AppState &state, const AppState &oldState, Mode *trigger
   // Send location
   Log.Debug("Sending current location...\n");
   if (!do_send(state, false)) {
-
+    Log.Error("Failed do_send\n");
+    gRespire.complete(triggeringMode);
   }
-  else {
-
-  }
+  // Action is completed later when TX_COMPLETE event received
 }
 
 void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Send location
   Log.Debug("Sending current location with ACK...\n");
   if (!do_send(state, true)) {
-
+    Log.Error("Failed do_send\n");
+    gRespire.complete(triggeringMode);
   }
-  else {
-
-  }
+  // Action is completed later when TX_COMPLETE event received
 }
 
 #endif
