@@ -156,7 +156,7 @@ class Field {
       bytesToString(value, bytes, _psize);
     }
     else {
-      strncpy(value, "Failed format", 2*_psize);
+      strncpy(value, "[Not Set]", 2*_psize);
       value[2*_psize] = '\0';
     }
   }
@@ -168,7 +168,7 @@ class Field {
       sprintf(value, "%lu", ivalue);
     }
     else {
-      strcpy(value, "Unknown Net ID");
+      strcpy(value, "[Not Set]");
     }
   }
 
@@ -230,11 +230,11 @@ Field gStatusFields[] = {
   }),
   Field("GPS Lt/Ln", [](char *value, const AppState &state) {
     const GpsSample &gpsSample = state.gpsSample();
-    sprintf(value, "%3.2f : %3.2f", gpsSample._latitude, gpsSample._longitude);
+    sprintf(value, "%2.1f/%2.1f", gpsSample._latitude, gpsSample._longitude);
   }),
   Field("GPS Alt/H", [](char *value, const AppState &state) {
     const GpsSample &gpsSample = state.gpsSample();
-    sprintf(value, "%3.2f, %3.2f", gpsSample._altitude, gpsSample._HDOP);
+    sprintf(value, "%3.1f,%1.1f", gpsSample._altitude, gpsSample._HDOP);
   }),
   Field("TTN Join", [](char *value, const AppState &state) {
     strcpy(value, state.getJoined() ? "Yes" : "No");
@@ -249,8 +249,8 @@ Field gStatusFields[] = {
 };
 
 Field gParamFields[] = {
-  Field("AppEUI", 8),
-  Field("DevEUI", 8),
+  Field("APPEUI", 8),
+  Field("DEVEUI", 8),
   Field("NETID"),
 };
 
