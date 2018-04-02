@@ -225,6 +225,7 @@ class AppState : public RespireState<AppState> {
   }
 
   bool getGpsPower() const {
+    return _usbPower || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
   }
 
   uint8_t page() const {
