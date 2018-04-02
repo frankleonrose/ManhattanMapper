@@ -22,6 +22,9 @@ Mode ModeMain(Mode::Builder("Main")
               .addChild(&ModeFunctional));
   Mode ModeDisplay(Mode::Builder("Display")
       .idleMode(&ModeDisplayBlank)
+      .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
+        return (state.field()!=oldState.field()) || (state.buttonAny() && !oldState.buttonAny());
+      })
       .addChild(&ModeDisplayBlank)
       .addChild(&ModeDisplayBlank2)
       .addChild(&ModeDisplayStatus)

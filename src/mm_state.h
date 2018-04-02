@@ -256,6 +256,10 @@ class AppState : public RespireState<AppState> {
     onUpdate(oldState);
   }
 
+  bool buttonAny() const {
+    return _buttonPage || _buttonField || _buttonChange;
+  }
+
   bool buttonPage() const {
     return _buttonPage;
   }
