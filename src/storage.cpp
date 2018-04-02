@@ -122,9 +122,9 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
   }
 
   char dataString[300];
-  sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,battery,frame", // TODO frame & battery
+  sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,%d,%f,%d",
         (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
-        gps._latitude, gps._longitude, gps._altitude, gps._HDOP /*, state.ttnFrameUp(), state.batteryLevel() */);
+        gps._latitude, gps._longitude, gps._altitude, gps._HDOP, state.ttnFrameCounter(), state.batteryVolts(), state.getUsbPower());
 
   Log.Debug("Writing \"%s\" to file \"%s\"\n", dataString, filename);
 
