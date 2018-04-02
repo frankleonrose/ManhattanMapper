@@ -105,6 +105,7 @@ extern uint8_t fieldCountForPage(const AppState &state, uint8_t page);
 class AppState : public RespireState<AppState> {
   // External state
   bool _usbPower;
+  float _batteryVolts;
   bool _gpsFix;
 
   GpsSample _gpsSample;
@@ -131,6 +132,7 @@ class AppState : public RespireState<AppState> {
   AppState(const AppState &otherState)
   : RespireState(otherState),
     _usbPower(otherState._usbPower),
+    _batteryVolts(otherState._batteryVolts),
     _gpsFix(otherState._gpsFix),
     _gpsSample(otherState._gpsSample),
     _gpsSampleExpiry(otherState._gpsSampleExpiry),
@@ -176,6 +178,21 @@ class AppState : public RespireState<AppState> {
     }
     AppState oldState(*this);
     _usbPower = value;
+    onUpdate(oldState);
+  }
+
+  float batteryVolts() const {
+    return _batteryVolts;
+  }
+
+  void batteryVolts(float value) {
+    if (_batteryVolts == value)
+    {
+      // Short circuit no change
+      return;
+    }
+    AppState oldState(*this);
+    _batteryVolts = value;
     onUpdate(oldState);
   }
 
