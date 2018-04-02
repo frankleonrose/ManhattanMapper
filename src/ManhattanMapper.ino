@@ -316,6 +316,14 @@ void setup() {
     Log.Debug(F("Registering ttn message listener!" CR));
     node.onMessage(onReceive);
 
+    // Are we already joined? (Do we have session vars APPSKEY, NWKSKEY, and DEVADDR?)
+    uint8_t buffer[16];
+    bool joined = gParameters.get("APPSKEY", buffer, 16)==PS_SUCCESS;
+    joined |= gParameters.get("NWKSKEY", buffer, 16)==PS_SUCCESS;
+    uint32_t devaddr;
+    joined |= gParameters.get("DEVADDR", &devaddr)==PS_SUCCESS;
+    gState.setJoined(joined);
+
     // LMIC init
     // Log.Debug(F("Begin lorawan interaction!" CR));
     // lorawan.begin();

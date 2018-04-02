@@ -113,6 +113,7 @@ class AppState : public RespireState<AppState> {
 
   uint32_t _ttnFrameCounter;
   uint32_t _ttnLastSend;
+  bool _joined = false;
 
   // Display states
   uint8_t _page = 0;
@@ -121,8 +122,6 @@ class AppState : public RespireState<AppState> {
   bool _buttonField = false;
   bool _buttonChange = false;
 
-  // Dependent state - no setters
-  bool _joined = false;
 
   public:
   AppState() : _gpsSample() {
@@ -136,12 +135,14 @@ class AppState : public RespireState<AppState> {
     _gpsFix(otherState._gpsFix),
     _gpsSample(otherState._gpsSample),
     _gpsSampleExpiry(otherState._gpsSampleExpiry),
+    _ttnFrameCounter(otherState._ttnFrameCounter),
+    _ttnLastSend(otherState._ttnLastSend),
+    _joined(otherState._joined),
     _page(otherState._page),
     _field(otherState._field),
     _buttonPage(otherState._buttonPage),
     _buttonField(otherState._buttonField),
-    _buttonChange(otherState._buttonChange),
-    _joined(otherState._joined),
+    _buttonChange(otherState._buttonChange)
   {}
 
   virtual void updateDerivedState(const AppState &oldState) {
@@ -243,6 +244,10 @@ class AppState : public RespireState<AppState> {
 
   bool getGpsPower() const {
     return _usbPower || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
+  }
+
+  uint32_t ttnFrameCounter() const {
+    return _ttnFrameCounter;
   }
 
   uint8_t page() const {
