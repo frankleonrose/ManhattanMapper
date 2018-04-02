@@ -11,7 +11,7 @@ extern AppState gState;
 extern RespireContext<AppState> gRespire;
 static bool gSDAvailable = false;
 
-static char *kParamFile = "params.ini";
+static const char *kParamFile = "params.ini";
 
 // https://learn.adafruit.com/using-atsamd21-sercom-to-add-more-spi-i2c-serial-ports/creating-a-new-spi
 // http://asf.atmel.com/docs/3.27.0/samd21/html/asfdoc_sam0_sercom_spi_mux_settings.html
@@ -34,11 +34,12 @@ bool readParametersFromSD(ParameterStore &pstore) {
       char buffer[size];
       int res = file.readBytes(buffer, size);
       file.close();
-      if (res!=-1) {
+      if (res!=size) {
         Log.Error(F("Could not read entirety of parameter file '%s'.\n"), kParamFile);
         return false;
       }
       bool ok = pstore.deserialize(buffer, size);
+      Log.Debug("Stored: %s", buffer);
       return ok;
     }
     else {
@@ -72,7 +73,7 @@ bool writeParametersToSD(ParameterStore &pstore) {
     size_t written = file.write(buffer, size);
     file.close();
     if (written!=size) {
-      Log.Error(F("Could not read entirety of parameter file '%s'.\n"), kParamFile);
+      Log.Error(F("Could not write entirety of parameter file '%s'.\n"), kParamFile);
       return false;
     }
     return true;
