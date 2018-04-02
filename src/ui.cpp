@@ -1,3 +1,5 @@
+#ifndef UNIT_TEST
+
 #include <Arduino.h>
 #include <Adafruit_ZeroTimer.h>
 // Simplifying wrapper lib didn't work for me.
@@ -278,7 +280,7 @@ void displayErrors(const AppState &state, const AppState &oldState, Mode *trigge
   gRespire.complete(triggeringMode);
 }
 
-extern uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
+uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
   switch (page) {
     case 0: return ELEMENTS(gStatusFields);
     case 1: return ELEMENTS(gParamFields);
@@ -287,3 +289,4 @@ extern uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
   }
 }
 
+#endif

@@ -1,3 +1,5 @@
+#ifndef UNIT_TEST
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <SdFat.h>
@@ -154,3 +156,5 @@ void storageSetup() {
     gSDAvailable = true;
   }
 }
+
+#endif

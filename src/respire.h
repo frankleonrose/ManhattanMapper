@@ -237,7 +237,7 @@ class Mode {
     }
   }
 
-  bool attached() { return _stateIndex != STATE_INDEX_INITIAL; }
+  bool attached() const { return _stateIndex != STATE_INDEX_INITIAL; }
 
   void attach(RespireStateBase &state);
 

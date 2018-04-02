@@ -501,6 +501,10 @@ int main(int argc, char **argv) {
 
 #ifdef MOCK_ACTIONS
 
+uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
+  return 0;
+}
+
 void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Reify GpsPower value
 }

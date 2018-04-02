@@ -147,7 +147,7 @@ class AppState : public RespireState<AppState> {
 
   virtual void updateDerivedState(const AppState &oldState) {
     static const uint8_t kPageCount = 3;
-    if (ModeDisplay.isActive(*this)) { // Buttons change page/field only while display is on
+    if (ModeDisplay.attached() && ModeDisplay.isActive(*this)) { // Buttons change page/field only while display is on
       if (buttonPage() && !oldState.buttonPage()) {
         _page = (_page + 1) % kPageCount;
         _field = 0;
@@ -243,7 +243,7 @@ class AppState : public RespireState<AppState> {
   }
 
   bool getGpsPower() const {
-    return _usbPower || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
+    return getUsbPower() || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
   }
 
   uint32_t ttnFrameCounter() const {
