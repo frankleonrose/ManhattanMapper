@@ -316,6 +316,8 @@ void setup() {
     Log.Debug(F("Registering ttn message listener!" CR));
     node.onMessage(onReceive);
 
+    node.begin();
+
     // Are we already joined? (Do we have session vars APPSKEY, NWKSKEY, and DEVADDR?)
     uint8_t buffer[16];
     bool joined = gParameters.get("APPSKEY", buffer, 16)==PS_SUCCESS;
@@ -360,12 +362,12 @@ void setup() {
 }
 
 void loop() {
-  // Log.Debug(F("os_runloop_once" CR));
+  // Log.Debug(F("loop" CR)); delay(1000);
   lorawan.loop();
   uiLoop();
 
   if (!ModeSend.isActive(gState)) {
-    // Don't do parsing or timer optional things that could throw off LoRa timing.
+    // Do parsing and timer optional things that could throw off LoRa timing only while NOT sending.
     gpsLoop(Serial);
     gTimer.update();
     gState.setGpsFix(gpsHasFix()); // Quick if value didn't change
