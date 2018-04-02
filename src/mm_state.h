@@ -100,6 +100,8 @@ typedef struct GpsSample {
   }
 } GpsSample;
 
+extern uint8_t fieldCountForPage(const AppState &state, uint8_t page);
+
 class AppState : public RespireState<AppState> {
   // External state
   bool _usbPower;
@@ -139,6 +141,19 @@ class AppState : public RespireState<AppState> {
     _buttonChange(otherState._buttonChange),
     _joined(otherState._joined),
   {}
+
+  virtual void updateDerivedState(const AppState &oldState) {
+    static const uint8_t kPageCount = 3;
+    if (ModeDisplay.isActive(*this)) { // Buttons change page/field only while display is on
+      if (buttonPage() && !oldState.buttonPage()) {
+        _page = (_page + 1) % kPageCount;
+        _field = 0;
+      }
+      if (buttonField() && !oldState.buttonField()) {
+        _field = (_field + 1) % fieldCountForPage(*this, _page);
+      }
+    }
+  }
 
   void reset() {
     RespireState<AppState>::reset();

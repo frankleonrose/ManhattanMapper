@@ -9,9 +9,11 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_FeatherOLED.h>
 #include <mm_state.h>
+#include <ParameterStore.h>
 
 extern AppState gState;
 extern RespireContext<AppState> gRespire;
+extern ParameterStore gParameters;
 
 Adafruit_FeatherOLED gDisplay;
 
@@ -81,11 +83,13 @@ void uiSetup() {
   Log.Debug("uiSetup enable button timer\n");
   uiButtonTimer.enable(true);
 
+  Log.Debug("uiSetup display init()\n");
   gDisplay.init();
   gDisplay.setBatteryVisible(true);
   gDisplay.setBatteryIcon(true);
   gDisplay.setBattery(3.5);
 
+  Log.Debug("uiSetup display splash()\n");
   gDisplay.clearMsgArea();
   gDisplay.renderBattery();
   // gDisplay.setTextSize(2);
@@ -95,10 +99,10 @@ void uiSetup() {
   gDisplay.println("Let's Get To Work!");
   gDisplay.display();
 
-  // gDisplay.clearDisplay();
   // // below first two number equals stating pixel point,the three numbers next to logoname represent width, height and rotation
   // gDisplay.drawBitmap(0, 0, ttn_glcd_bmp, 128, 64, 1);
   // gDisplay.display();
+  Log.Debug("uiSetup finished\n");
 }
 
 void uiLoop() {
@@ -118,29 +122,168 @@ void displayBlank(const AppState &state, const AppState &oldState, Mode *trigger
   gRespire.complete(triggeringMode);
 }
 
+typedef void (*FormatFn)(char *formatted, const AppState &state);
+
+class Field {
+  const char * const _pname;
+  const size_t _psize;
+  FormatFn _formatter;
+
+  char hexFormat(uint8_t hex) {
+    hex &= 0x0F;
+    if (hex<10) {
+      return '0' + hex;
+    }
+    else {
+      return 'A' + hex - 10;
+    }
+  }
+
+  void bytesToString(char *s, const uint8_t *bytes, const uint16_t size) {
+    for (uint16_t i=0; i<size; ++i) {
+      *(s++) = hexFormat(bytes[i] >> 4);
+      *(s++) = hexFormat(bytes[i]);
+    }
+    *(s++) = '\0';
+  }
+
+  void bytesValue(char *value) {
+    uint8_t bytes[_psize];
+    int ret = gParameters.get(_pname, bytes, _psize);
+    if (ret==PS_SUCCESS) {
+      bytesToString(value, bytes, _psize);
+    }
+    else {
+      strncpy(value, "Failed format", 2*_psize);
+      value[2*_psize] = '\0';
+    }
+  }
+
+  void intValue(char *value) {
+    uint32_t ivalue = 0;
+    int ret = gParameters.get(_pname, &ivalue);
+    if (ret==PS_SUCCESS) {
+      sprintf(value, "%lu", ivalue);
+    }
+    else {
+      strcpy(value, "Unknown Net ID");
+    }
+  }
+
+  public:
+
+  Field(const char * const pname, FormatFn formatter)
+  : _pname(pname), _psize(0), _formatter(formatter) {
+  }
+
+  Field(const char * const pname, const size_t psize)
+  : _pname(pname), _psize(psize), _formatter(NULL) {
+  }
+
+  Field(const char * const pname)
+  : _pname(pname), _psize(0), _formatter(NULL) {
+  }
+
+  void display(const AppState &state) {
+    gDisplay.setTextSize(2);
+    gDisplay.setCursor(0, 0);
+
+    gDisplay.println(_pname);
+    char valueBuf[100];
+    if (_formatter!=NULL) {
+      _formatter(valueBuf, state);
+    }
+    else if (0 < _psize) {
+      bytesValue(valueBuf);
+    }
+    else {
+      intValue(valueBuf);
+    }
+    gDisplay.println(valueBuf);
+  }
+};
+
+Field gStatusFields[] = {
+  Field("Power", [](char *value, const AppState &state) {
+    if (state.getUsbPower()) {
+      strcpy(value, "USB");
+    }
+    else {
+      sprintf(value, "Bat (%0.2fV)", state.batteryVolts());
+    }
+  }),
+  Field("GPS Power", [](char *value, const AppState &state) {
+    strcpy(value, state.getGpsPower() ? "Yes" : "No");
+  }),
+  Field("GPS Fix", [](char *value, const AppState &state) {
+    strcpy(value, state.hasGpsFix() ? "Yes" : "No");
+  }),
+  Field("GPS Date", [](char *value, const AppState &state) {
+    const GpsSample &gpsSample = state.gpsSample();
+    sprintf(value, "%04d/%02d/%02d", gpsSample._year, gpsSample._month, gpsSample._day);
+  }),
+  Field("GPS Time", [](char *value, const AppState &state) {
+    const GpsSample &gpsSample = state.gpsSample();
+    sprintf(value, "%02d:%02d:%02d", gpsSample._hour, gpsSample._minute, gpsSample._seconds);
+  }),
+  Field("GPS Lt/Ln", [](char *value, const AppState &state) {
+    const GpsSample &gpsSample = state.gpsSample();
+    sprintf(value, "%3.2f : %3.2f", gpsSample._latitude, gpsSample._longitude);
+  }),
+  Field("GPS Alt/H", [](char *value, const AppState &state) {
+    const GpsSample &gpsSample = state.gpsSample();
+    sprintf(value, "%3.2f, %3.2f", gpsSample._altitude, gpsSample._HDOP);
+  }),
+  Field("TTN Join", [](char *value, const AppState &state) {
+    strcpy(value, state.getJoined() ? "Yes" : "No");
+  }),
+  Field("TTN Up", [](char *value, const AppState &state) {
+    sprintf(value, "%d", state.ttnFrameCounter());
+  }),
+  Field("DEVADDR"),
+  Field("NWKSKEY", 16),
+  Field("APPSKEY", 16),
+  // uint32_t _ttnLastSend;
+};
+
+Field gParamFields[] = {
+  Field("AppEUI", 8),
+  Field("DevEUI", 8),
+  Field("NETID"),
+};
+
 void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Called displayStatus\n");
-  gDisplay.clearMsgArea();
-  gDisplay.renderBattery();
-  gDisplay.println("Status");
+  gDisplay.clearDisplay();
+  gStatusFields[state.field() % ELEMENTS(gStatusFields)].display(state);
   gDisplay.display();
   gRespire.complete(triggeringMode);
 }
 
 void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Called displayParameters\n");
-  gDisplay.clearMsgArea();
-  gDisplay.renderBattery();
-  gDisplay.println("Parameters");
+  gDisplay.clearDisplay();
+  gParamFields[state.field() % ELEMENTS(gParamFields)].display(state);
   gDisplay.display();
   gRespire.complete(triggeringMode);
 }
 
 void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   Log.Debug("Called displayErrors\n");
-  gDisplay.clearMsgArea();
-  gDisplay.renderBattery();
+  gDisplay.clearDisplay();
+  gDisplay.setTextSize(2);
+  gDisplay.setCursor(0, 0);
   gDisplay.println("Errors");
   gDisplay.display();
   gRespire.complete(triggeringMode);
 }
+
+extern uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
+  switch (page) {
+    case 0: return ELEMENTS(gStatusFields);
+    case 1: return ELEMENTS(gParamFields);
+    case 2: return 1;
+    default: return 1;
+  }
+}
+

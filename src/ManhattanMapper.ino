@@ -89,9 +89,9 @@ const Arduino_LoRaWAN::lmic_pinmap define_lmic_pins = {
 
 const int STORE_SIZE = 2000;
 RamStore<STORE_SIZE> byteStore;
-ParameterStore pstore(byteStore);
-LoraStack_LoRaWAN lorawan(define_lmic_pins, pstore);
-LoraStack node(lorawan, pstore, TTN_FP_US915);
+ParameterStore gParameters(byteStore);
+LoraStack_LoRaWAN lorawan(define_lmic_pins, gParameters);
+LoraStack node(lorawan, gParameters, TTN_FP_US915);
 
 void onEvent(void *ctx, uint32_t event) {
   if (event==EV_TXCOMPLETE) {
@@ -108,7 +108,7 @@ void onEvent(void *ctx, uint32_t event) {
         state.transmittedFrame(LMIC.seqnoUp);
       });
     }
-    writeParametersToSD(pstore);
+    writeParametersToSD(gParameters);
     digitalWrite(LED_BUILTIN, LOW);
   }
   else {
@@ -131,7 +131,7 @@ void onEvent(void *ctx, uint32_t event) {
         case EV_JOINED:
             Log.Debug(F("EV_JOINED" CR));
             Log.Debug(F("Writing parameters to SD card\n"));
-            writeParametersToSD(pstore);
+            writeParametersToSD(gParameters);
             gRespire.complete(ModeAttemptJoin, [](AppState &state){
               state.setJoined(true);
             });
@@ -272,13 +272,13 @@ void setup() {
         while (1);
     }
     Log.Debug(F("Initializing parameter store!" CR));
-    status = pstore.begin();
+    status = gParameters.begin();
     if (!status) {
         Log.Error(F("Failed to initialize Parameter Store!" CR));
         while (1);
     }
-    // pstore.set("FCNTUP", SEQ_NO_20180213);
-    readParametersFromSD(pstore);
+    // gParameters.set("FCNTUP", SEQ_NO_20180213);
+    readParametersFromSD(gParameters);
 
     Log.Debug(F("Setting lorawan debug mask." CR));
     lorawan.SetDebugMask(Arduino_LoRaWAN::LOG_BASIC | Arduino_LoRaWAN::LOG_ERRORS | Arduino_LoRaWAN::LOG_VERBOSE);
