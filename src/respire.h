@@ -406,26 +406,37 @@ class RespireStateBase {
   }
 };
 
+template <class TAppState> class RespireContext;
+
 template <class TAppState> class RespireState : public RespireStateBase {
-  //void (*_listener)(const TAppState &oldState);
-  std::function< void(const TAppState) > _listener;
+  RespireContext<TAppState> *_context;
+  std::function< void(const TAppState&, const TAppState&)> _listener;
 
   public:
 
-  // void setListener(void (*listener)(const TAppState &oldState)) {
-  //   _listener = listener;
-  // }
-  void setListener(const std::function< void(const TAppState) > &listener) {
+  void setContext(RespireContext<TAppState> *context) {
+    _context = context;
+  }
+
+  void setListener(const std::function< void(const TAppState&, const TAppState&) > &listener) {
     _listener = listener;
   }
 
-  void onUpdate(const AppState &oldState) {
-    _listener(oldState);
+  void onUpdate(const TAppState &oldState) {
+    // Change any derived state. Alternatively, derived state could be
+    updateDerivedState(oldState);
+    if (_context) {
+      // Update modes held by RespireContext
+      _context->onUpdate(oldState);
+    }
+    if (_listener) {
+      // Call optional state change listener...
+      _listener(*static_cast<TAppState*>(this), oldState);
+    }
   }
-  virtual void onChange(const AppState &oldState, Executor *executor) = 0;
+  virtual void updateDerivedState(const TAppState &oldState) {};
+  virtual void onChange(const TAppState &oldState, Executor *executor) = 0;
 };
-
-template <class TAppState> class RespireContext;
 
 template <class TAppState> class StateTransaction {
   RespireContext<TAppState> &_context; // Reference to mutable state so we have end result in dtor
@@ -457,15 +468,13 @@ class RespireContext {
     _executor(executor),
     _holdLevel(1)
   {
-    _appState.setListener([this](const AppState &oldState) {
-      onUpdate(oldState);
-    });
+    _appState.setContext(this);
   }
 
   ~RespireContext() {
     // This dtor is most useful for tests.
     // Generally not called in app because RespireContext is global that never leaves scope.
-    _appState.setListener(NULL);
+    _appState.setContext(NULL);
     _modeMain.deepReset();
     // Walk all nodes and restore to initial values.
   }
