@@ -9,6 +9,13 @@ TODO
 -
 */
 
+#if !defined(RS_ASSERT)
+#define RS_ASSERT(x) while (!(x)) { Log.Error("Assertion failure: " #x ); delay(1000); }
+#endif
+#if !defined(RS_ASSERT_MSG)
+#define RS_ASSERT_MSG(x, msg) if (!(x)) { Log.Error("Assertion failure: " #x "[" msg "]"); }
+#endif
+
 #include <Arduino.h>
 #include <limits.h>
 #include <cstdio>
@@ -165,7 +172,7 @@ class Mode {
       return *this;
     }
     Builder &addChild(Mode *child) {
-      assert(child!=NULL);
+      RS_ASSERT(child!=NULL);
       _children.push_back(child);
       return *this;
     }
@@ -374,17 +381,17 @@ class RespireStateBase {
 
   uint8_t allocateMode() {
     uint8_t alloc = _modesCount++;
-    assert(alloc<ELEMENTS(_modeStates));
+    RS_ASSERT(alloc<ELEMENTS(_modeStates));
     return alloc;
   }
 
   ModeState &modeState(const uint8_t stateIndex) {
-    assert(stateIndex!=STATE_INDEX_INITIAL);
+    RS_ASSERT(stateIndex!=STATE_INDEX_INITIAL);
     return _modeStates[stateIndex];
   }
 
   const ModeState &modeState(const uint8_t stateIndex) const {
-    assert(stateIndex!=STATE_INDEX_INITIAL);
+    RS_ASSERT(stateIndex!=STATE_INDEX_INITIAL);
     return _modeStates[stateIndex];
   }
 
@@ -537,7 +544,7 @@ class RespireContext {
   }
 
   void resumeActions(const TAppState &oldState) {
-    assert(0 < _holdLevel);
+    RS_ASSERT(0 < _holdLevel);
     --_holdLevel;
     if (_holdLevel==0) {
       performActions(oldState);
@@ -568,8 +575,6 @@ class RespireContext {
 
   void onUpdate(const AppState &oldState) {
     _appState.newFrame(_clock->millis());
-
-    // _joined = false; // isSet(deviceAddr) && isSet(appSessionKey) && isSet(networkSessionKey)
 
     _modeMain.propagate(ActivationActive, _appState, oldState);
 

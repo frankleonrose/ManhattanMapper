@@ -211,7 +211,7 @@ bool Mode::terminate(AppState &state) {
 
 uint8_t Mode::decSupportiveParents(const AppState &state) {
   if (state.changeCounter()!=_supportiveFrame) {
-    // assert(0 < _countParents);
+    // RS_ASSERT(0 < _countParents);
     // Log.Debug("Resetting parents to %d\n", (int)_countParents);
     _supportiveParents = _countParents;
     _supportiveFrame = state.changeCounter();
@@ -275,15 +275,15 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
   }
 
   if (!_children.empty() && remaining==0 && barren && !persistent(state)) {
-    assert(limit==0); // If remaining is 0, limit must be, too.
-    assert(!skippedIdleCell); // If limit is 0, logic above will have propagated to idleCell
-    assert(childActivation==ActivationSustaining);
+    RS_ASSERT(limit==0); // If remaining is 0, limit must be, too.
+    RS_ASSERT(!skippedIdleCell); // If limit is 0, logic above will have propagated to idleCell
+    RS_ASSERT(childActivation==ActivationSustaining);
     Log.Debug("Terminating for barren and no capacity to inspire children: %s\n", name());
     terminate(state);
   }
   else if (childActivation!=ActivationSustaining) {
     if (_idleMode!=NULL) {
-      assert(skippedIdleCell);
+      RS_ASSERT(skippedIdleCell);
       // We have idle cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
         if (limit>0) {
@@ -300,7 +300,7 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
       }
     }
     else { // No idle Mode
-      assert(!skippedIdleCell);
+      RS_ASSERT(!skippedIdleCell);
       if (barren) {
         // Barren cells lose activation, unless we are explicitly kept active as idleCell or persistent(because periodic or min duration)
         if (parentActivation!=ActivationIdleCell && !persistent(state)) {
@@ -350,7 +350,7 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
   else {
     // Not active. Should activate?
-    assert(!(parentActivation==ActivationIdleCell && _followMode!=NULL)); // We don't currently support idleModes that are also followers.
+    RS_ASSERT(!(parentActivation==ActivationIdleCell && _followMode!=NULL)); // We don't currently support idleModes that are also followers.
     if (inspiring(parentActivation, state, oldState)) {
       // Either parent activation or requiredState (or both) just transitioned to true.
       if (parentActivation==ActivationInspiring) {
