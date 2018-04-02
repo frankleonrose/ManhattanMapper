@@ -121,6 +121,7 @@ class AppState : public RespireState<AppState> {
   bool _buttonPage = false;
   bool _buttonField = false;
   bool _buttonChange = false;
+  bool _redisplayRequested = false; // Toggle this to trigger redisplay.
 
 
   public:
@@ -142,7 +143,8 @@ class AppState : public RespireState<AppState> {
     _field(otherState._field),
     _buttonPage(otherState._buttonPage),
     _buttonField(otherState._buttonField),
-    _buttonChange(otherState._buttonChange)
+    _buttonChange(otherState._buttonChange),
+    _redisplayRequested(otherState._redisplayRequested)
   {}
 
   virtual void updateDerivedState(const AppState &oldState) {
@@ -226,10 +228,6 @@ class AppState : public RespireState<AppState> {
 
   bool hasRecentGpsLocation() const {
     return _gpsSampleExpiry != 0 && (millis() < _gpsSampleExpiry);
-  }
-
-  bool getGpsFix() const {
-    return _gpsFix;
   }
 
   bool getJoined() const {
@@ -328,6 +326,16 @@ class AppState : public RespireState<AppState> {
     onUpdate(oldState);
   }
 
+  bool redisplayRequested() const {
+    return _redisplayRequested;
+  }
+
+  void requestRedisplay() {
+    AppState oldState(*this);
+    _redisplayRequested = !_redisplayRequested;
+    onUpdate(oldState);
+  }
+
   void transmittedFrame(const uint32_t frameCounter) {
     _ttnFrameCounter = frameCounter;
     _ttnLastSend = millis();
@@ -337,10 +345,11 @@ class AppState : public RespireState<AppState> {
     Log.Debug("AppState: ----------------\n");
     Log.Debug("- Millis:             %u\n", (long unsigned)millis());
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
+    Log.Debug("- Display Change:  %T\n", redisplayRequested());
     Log.Debug("- USB Power [Input]:  %T\n", getUsbPower());
     Log.Debug("- Joined [Input]:     %T\n", getJoined());
     Log.Debug("- GPS Power [Output]: %T\n", getGpsPower());
-    Log.Debug("- GPS Fix [Input]:     %T\n", getGpsFix());
+    Log.Debug("- GPS Fix [Input]:     %T\n", hasGpsFix());
     Log.Debug("- GPS Location [Input]: %T\n", hasRecentGpsLocation());
     Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
     Log.Debug("- TTN Frame Up [Input]: %u\n", _ttnFrameCounter);

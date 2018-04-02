@@ -23,7 +23,8 @@ Mode ModeMain(Mode::Builder("Main")
   Mode ModeDisplay(Mode::Builder("Display")
       .idleMode(&ModeDisplayBlank)
       .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
-        return (state.field()!=oldState.field()) || (state.buttonAny() && !oldState.buttonAny());
+        return (state.field()!=oldState.field())                            // Field changes
+            || (state.buttonAny() && !oldState.buttonAny());                // Any button is pressed
       })
       .addChild(&ModeDisplayBlank)
       .addChild(&ModeDisplayBlank2)
@@ -44,7 +45,8 @@ Mode ModeMain(Mode::Builder("Main")
           return state.page()==0;
         })
         .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
-          return state.field()!=oldState.field();
+          return (state.field()!=oldState.field())
+              || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
     Mode ModeDisplayParameters(Mode::Builder("DisplayParameters")
         .invokeFn(displayParameters)
@@ -52,7 +54,8 @@ Mode ModeMain(Mode::Builder("Main")
           return state.page()==1;
         })
         .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
-          return state.field()!=oldState.field();
+          return (state.field()!=oldState.field())
+              || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
     Mode ModeDisplayErrors(Mode::Builder("DisplayErrors")
         .invokeFn(displayErrors)
@@ -61,7 +64,8 @@ Mode ModeMain(Mode::Builder("Main")
         })
         .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
           // Log.Debug("%s inspirationPred: %d != %d\n", ModeDisplayErrors.name(), (int)state.field(), (int)oldState.field());
-          return state.field()!=oldState.field();
+          return (state.field()!=oldState.field())
+              || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
 
 Mode ModeFunctional(Mode::Builder("Functional")

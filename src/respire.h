@@ -416,8 +416,12 @@ class RespireStateBase {
 template <class TAppState> class RespireContext;
 
 template <class TAppState> class RespireState : public RespireStateBase {
+  public:
+  typedef std::function< void(const TAppState&, const TAppState&)> ListenerFn;
+
+  private:
   RespireContext<TAppState> *_context;
-  std::function< void(const TAppState&, const TAppState&)> _listener;
+  ListenerFn _listener;
 
   public:
 
@@ -425,7 +429,7 @@ template <class TAppState> class RespireState : public RespireStateBase {
     _context = context;
   }
 
-  void setListener(const std::function< void(const TAppState&, const TAppState&) > &listener) {
+  void setListener(const ListenerFn &listener) {
     _listener = listener;
   }
 

@@ -17,7 +17,8 @@ extern AppState gState;
 extern RespireContext<AppState> gRespire;
 extern ParameterStore gParameters;
 
-Adafruit_FeatherOLED gDisplay;
+static Adafruit_FeatherOLED gDisplay;
+static bool gRequestDisplay = false; // Request display flag. Set it and next loop we will request redisplay.
 
 #define BUTTON_TIMER_PERIOD_MICROSECONDS 2000
 #define BUTTON_A_PIN 9
@@ -115,6 +116,10 @@ void uiLoop() {
   gState.buttonPage(gButtonA);
   gState.buttonField(gButtonB);
   gState.buttonChange(gButtonC);
+  if (gRequestDisplay) {
+    gState.requestRedisplay();
+    gRequestDisplay = false;
+  }
 }
 
 void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
@@ -130,6 +135,7 @@ class Field {
   const char * const _pname;
   const size_t _psize;
   FormatFn _formatter;
+  RespireState<AppState>::ListenerFn _listener = NULL;
 
   char hexFormat(uint8_t hex) {
     hex &= 0x0F;
@@ -174,8 +180,8 @@ class Field {
 
   public:
 
-  Field(const char * const pname, FormatFn formatter)
-  : _pname(pname), _psize(0), _formatter(formatter) {
+  Field(const char * const pname, FormatFn formatter, RespireState<AppState>::ListenerFn listener = NULL)
+  : _pname(pname), _psize(0), _formatter(formatter), _listener(listener) {
   }
 
   Field(const char * const pname, const size_t psize)
@@ -187,6 +193,10 @@ class Field {
   }
 
   void display(const AppState &state) {
+    if (_listener) {
+      gState.setListener(_listener);
+    }
+
     gDisplay.setTextSize(2);
     gDisplay.setCursor(0, 0);
 
@@ -213,12 +223,20 @@ Field gStatusFields[] = {
     else {
       sprintf(value, "Bat (%0.2fV)", state.batteryVolts());
     }
+  }, [](const AppState &state, const AppState &oldState) {
+    if (state.getUsbPower()!=oldState.getUsbPower()) {
+      gRequestDisplay = true;
+    }
   }),
   Field("GPS Power", [](char *value, const AppState &state) {
     strcpy(value, state.getGpsPower() ? "Yes" : "No");
   }),
   Field("GPS Fix", [](char *value, const AppState &state) {
     strcpy(value, state.hasGpsFix() ? "Yes" : "No");
+  }, [](const AppState &state, const AppState &oldState) {
+    if (state.hasGpsFix()!=oldState.hasGpsFix()) {
+      gRequestDisplay = true;
+    }
   }),
   Field("GPS Date", [](char *value, const AppState &state) {
     const GpsSample &gpsSample = state.gpsSample();
