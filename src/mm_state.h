@@ -1,12 +1,12 @@
 /*
-  Herein I attempt to imagine what the Helex-generated code might look like.
+  Herein I attempt to imagine what the Respire-generated code might look like.
 
   AppState - The entire application state.
   Mutator - A mutation of the app state. (Right now just setABC() calls.)
   OnTime - Tickle function that gets called as time passes. In the future
           this should all be done with scheduling such that the system knows
           exactly when next it cares to do something.
-  Mode - The basic organizational unit of Helex. The structure and attributes
+  Mode - The basic organizational unit of Respire. The structure and attributes
           of a particular Mode are stored in the Mode itself.
           The runtime state of all Modes is stored within ModeState structs
           that are contained within the AppState object. This breakdown
@@ -120,7 +120,6 @@ class AppState : public RespireState<AppState> {
 
   // Dependent state - no setters
   bool _joined = false;
-  bool _gpsPowerOut = false;
 
   public:
   AppState() : _gpsSample() {
@@ -139,7 +138,6 @@ class AppState : public RespireState<AppState> {
     _buttonField(otherState._buttonField),
     _buttonChange(otherState._buttonChange),
     _joined(otherState._joined),
-    _gpsPowerOut(otherState._gpsPowerOut)
   {}
 
   void reset() {
@@ -147,7 +145,6 @@ class AppState : public RespireState<AppState> {
     _usbPower = false;
     _gpsFix = false;
     _joined = false;
-    _gpsPowerOut = false;
     _gpsSampleExpiry = 0;
   }
 
@@ -213,7 +210,6 @@ class AppState : public RespireState<AppState> {
   }
 
   bool getGpsPower() const {
-    return _gpsPowerOut;
   }
 
   uint8_t page() const {
@@ -297,7 +293,7 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
     Log.Debug("- USB Power [Input]:  %T\n", _usbPower);
     Log.Debug("- Joined [Input]:     %T\n", _joined);
-    Log.Debug("- GPS Power [Output]: %T\n", _gpsPowerOut);
+    Log.Debug("- GPS Power [Output]: %T\n", getGpsPower());
     Log.Debug("- GPS Fix [Input]:     %T\n", _gpsFix);
     Log.Debug("- GPS Location [Input]: %T\n", hasRecentGpsLocation());
     Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
@@ -309,10 +305,8 @@ class AppState : public RespireState<AppState> {
   }
 
   virtual void onChange(const AppState &oldState, Executor *executor) {
-    _gpsPowerOut = _usbPower || (ModeLowPowerGpsSearch.attached() && ModeLowPowerGpsSearch.isActive(*this));
-
     // This should be simple listener or output transducer
-    if (_gpsPowerOut!=oldState._gpsPowerOut) {
+    if (getGpsPower()!=oldState.getGpsPower()) {
       executor->exec(changeGpsPower, *this, oldState, NULL);
     }
   }
