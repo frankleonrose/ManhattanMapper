@@ -27,18 +27,12 @@ Mode ModeMain(Mode::Builder("Main")
             || (state.buttonAny() && !oldState.buttonAny());                // Any button is pressed
       })
       .addChild(&ModeDisplayBlank)
-      .addChild(&ModeDisplayBlank2)
       .addChild(&ModeDisplayStatus)
       .addChild(&ModeDisplayParameters)
       .addChild(&ModeDisplayErrors));
     Mode ModeDisplayBlank(Mode::Builder("DisplayBlank")
         .invokeFn(displayBlank)
         .invokeDelay(MINUTES_IN_MILLIS(1)));
-    Mode ModeDisplayBlank2(Mode::Builder("DisplayBlank2")
-        .invokeFn(displayBlank)
-        .requiredPred([](const AppState &state) -> bool {
-          return state.page()==0xFF;
-        }));
     Mode ModeDisplayStatus(Mode::Builder("DisplayStatus")
         .invokeFn(displayStatus)
         .requiredPred([](const AppState &state) -> bool {

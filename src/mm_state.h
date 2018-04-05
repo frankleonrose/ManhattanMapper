@@ -174,8 +174,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void setUsbPower(bool value) {
-    if (_usbPower == value)
-    {
+    if (_usbPower == value) {
       // Short circuit no change
       return;
     }
@@ -189,8 +188,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void batteryVolts(float value) {
-    if (_batteryVolts == value)
-    {
+    if (fabs(_batteryVolts - value) < 0.01) {
       // Short circuit no change
       return;
     }
@@ -204,8 +202,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void setGpsFix(bool value) {
-    if (_gpsFix == value)
-    {
+    if (_gpsFix == value) {
       // Short circuit no change
       return;
     }
