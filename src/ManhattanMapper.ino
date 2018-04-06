@@ -69,7 +69,7 @@ const char *devEui = "006158A2D06A7A4E";
 const char *appEui = "70B3D57EF0001C38";
 const char *appKey = "4681950BEFE343C33BD9BB81CA68A89E";
 
-#define PACKET_FORMAT_ID 0x3
+#define PACKET_FORMAT_ID 0x05
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).

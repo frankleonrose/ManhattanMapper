@@ -206,10 +206,10 @@ void gpsDump(Print &printer) {
 }
 
 uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
-  int32_t lat = _latitude * 46603;  // Expand +/-180 coordinate to fill 24bits
+  int32_t lat = _latitude * 93206;  // Expand +/-90 coordinate to fill 24bits
   uint32_t ulat = lat < 0 ? (UINT32_MAX-(uint32_t)(-lat)+1) : (uint32_t)(lat);
   ulat = htonl(ulat);
-  int32_t lon = _longitude * 93206; // Expand +/-90 coordinate to fill 24bits
+  int32_t lon = _longitude * 46603;  // Expand +/-180 coordinate to fill 24bits
   uint32_t ulon = lon < 0 ? (UINT32_MAX-(uint32_t)(-lon)+1) : (uint32_t)(lon);
   ulon = htonl(ulon);
   int16_t alt = _altitude;
@@ -217,8 +217,8 @@ uint8_t GpsSample::writePacket(uint8_t *packet, uint8_t packetSize) const {
   int16_t hdop = _HDOP * 1000;
   hdop = htons(hdop);
 
-  memcpy(packet + 0, &ulat, 3); // 24 bit
-  memcpy(packet + 3, &ulon, 3); // 24 bit
+  memcpy(packet + 0, ((uint8_t *)&ulat)+1, 3); // bottom 24 bits
+  memcpy(packet + 3, ((uint8_t *)&ulon)+1, 3); // bottom 24 bits
   memcpy(packet + 6,  &alt, 2);
   memcpy(packet + 8, &hdop, 2);
 
