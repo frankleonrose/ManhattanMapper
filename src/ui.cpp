@@ -88,18 +88,19 @@ void uiSetup() {
 
   Log.Debug("uiSetup display init()\n");
   gDisplay.init();
-  gDisplay.setBatteryVisible(true);
-  gDisplay.setBatteryIcon(true);
-  gDisplay.setBattery(3.5);
+  // gDisplay.setBatteryVisible(true);
+  // gDisplay.setBatteryIcon(true);
+  // gDisplay.setBattery(3.5);
 
   Log.Debug("uiSetup display splash()\n");
-  gDisplay.clearMsgArea();
-  gDisplay.renderBattery();
+  // gDisplay.clearMsgArea();
+  // gDisplay.renderBattery();
   // gDisplay.setTextSize(2);
-  gDisplay.println("Manhattan Mapper!");
-  gDisplay.println("The Things Network");
-  gDisplay.println("New York!");
-  gDisplay.println("Let's Get To Work!");
+  gDisplay.setTextSize(2);
+  gDisplay.println("Manhattan");
+  gDisplay.println("Mapper!");
+  // gDisplay.println("The Things Network");
+  // gDisplay.println("New York!");
   gDisplay.display();
 
   // // below first two number equals stating pixel point,the three numbers next to logoname represent width, height and rotation
@@ -258,7 +259,7 @@ Field gStatusFields[] = {
     strcpy(value, state.getJoined() ? "Yes" : "No");
   }),
   Field("TTN Up", [](char *value, const AppState &state) {
-    sprintf(value, "%d", state.ttnFrameCounter());
+    sprintf(value, "%d", state.ttnFrameCounter()-1);
   }),
   Field("DEVADDR"),
   Field("NWKSKEY", 16),

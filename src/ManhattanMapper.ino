@@ -192,6 +192,7 @@ uint8_t voltsToPercent(float volts) {
   level = MIN(MAX(level, 0), 100); // Peg to 0-100
 // debug: Voltage at 9: 4.33 [Rating 0-100 between 2.70 and 5.20 int: 65]
 // debug: Voltage at 15: 5.02 [Rating 0-100 between 2.70 and 5.20 int: 92]
+// VUSB through divider was 1.7 on battery and 2.5 on USB
   return (uint8_t)level;
 }
 
@@ -205,9 +206,8 @@ static void readBatteryVolts() {
 static void readUSBVolts() {
   float measured = (float)analogRead(VUSBPIN); // 0 to 1023
   float volts = measuredToVoltage(measured);
-  Log.Debug("Voltage at %d (USB): %f\n", (int)VUSBPIN, measured);
-  volts = 4.6;
-  gState.setUsbPower(volts>4.5);
+  // Log.Debug("Voltage at %d (USB): %f\n", (int)VUSBPIN, measured);
+  gState.setUsbPower(volts>4.4);
 }
 
 bool do_send(const AppState &state, const bool withAck) {
@@ -255,9 +255,9 @@ void setup() {
     Serial.begin(115200);
     Log.Init(LOGLEVEL, Serial);
     // Wait for 15 seconds. If no Serial by then, keep going. We are not connected.
-    for (int timeout=0; timeout<15 && !Serial; ++timeout) {
-      delay(1000);
-    }
+    // for (int timeout=0; timeout<15 && !Serial; ++timeout) {
+    //   delay(1000);
+    // }
     Log.Debug(F("Starting" CR));
 
     Log.Debug(F("Setup GPS" CR));
@@ -324,6 +324,7 @@ void setup() {
     joined |= gParameters.get("NWKSKEY", buffer, 16)==PS_SUCCESS;
     uint32_t devaddr;
     joined |= gParameters.get("DEVADDR", &devaddr)==PS_SUCCESS;
+    Log.Debug(F("Setting Joined: %T!" CR), joined);
     gState.setJoined(joined);
 
     // LMIC init

@@ -334,8 +334,10 @@ class AppState : public RespireState<AppState> {
   }
 
   void transmittedFrame(const uint32_t frameCounter) {
+    AppState oldState(*this);
     _ttnFrameCounter = frameCounter;
     _ttnLastSend = millis();
+    onUpdate(oldState);
   }
 
   void dump(const Mode &mainMode = ModeMain) const {
