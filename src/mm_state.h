@@ -27,6 +27,7 @@
 #undef max
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include "respire.h"
 #include <Logging.h>
 

@@ -312,8 +312,8 @@ void startedJoinAfter(RespireContext<AppState> &respire, const char *context, Ap
 }
 
 void test_join_every_5_min(void) {
-  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicJoin._perUnit, TimeUnitHour, "Tests expect 6 sends per *hour*");
-  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicJoin._perTimes, 12, "Tests expect *6* sends per hour");
+  TEST_ASSERT_EQUAL_MESSAGE(TimeUnitHour, ModePeriodicJoin._perUnit, "Tests expect 6 sends per *hour*");
+  TEST_ASSERT_EQUAL_MESSAGE(12, ModePeriodicJoin._perTimes, "Tests expect *6* sends per hour");
 
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
@@ -393,8 +393,8 @@ void startedSendAfter(RespireContext<AppState> &respire, const char *context, Ap
 }
 
 void test_send_every_10_min(void) {
-  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicSend._perUnit, TimeUnitHour, "Tests expect 6 sends per *hour*");
-  TEST_ASSERT_EQUAL_MESSAGE(ModePeriodicSend._perTimes, 6, "Tests expect *6* sends per hour");
+  TEST_ASSERT_EQUAL_MESSAGE(TimeUnitHour, ModePeriodicSend._perUnit, "Tests expect 6 sends per *hour*");
+  TEST_ASSERT_EQUAL_MESSAGE(6, ModePeriodicSend._perTimes, "Tests expect *6* sends per hour");
 
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, readGpsLocation, NULL);
