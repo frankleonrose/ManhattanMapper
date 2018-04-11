@@ -268,10 +268,12 @@ void setup() {
 
     Serial.begin(115200);
     Log.Init(LOGLEVEL, Serial);
+#if MM_DEBUG_SERIAL
     // Wait for 15 seconds. If no Serial by then, keep going. We are not connected.
-    // for (int timeout=0; timeout<15 && !Serial; ++timeout) {
-    //   delay(1000);
-    // }
+    for (int timeout=0; timeout<15 && !Serial; ++timeout) {
+      delay(1000);
+    }
+#endif
     Log.Debug(F("Starting" CR));
 
     Log.Debug(F("Setup GPS" CR));
