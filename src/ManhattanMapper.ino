@@ -137,6 +137,7 @@ void onEvent(void *ctx, uint32_t event) {
             writeParametersToSD(gParameters);
             gRespire.complete(ModeAttemptJoin, [](AppState &state){
               state.setJoined(true);
+              state.transmittedFrame(LMIC.seqnoUp);
             });
             break;
         case EV_RFU1:
@@ -144,6 +145,10 @@ void onEvent(void *ctx, uint32_t event) {
             break;
         case EV_JOIN_FAILED:
             Log.Debug(F("EV_JOIN_FAILED" CR));
+            LMIC_reset(); // Otherwise MCCI Arduino LoRaWAN library keeps trying to join.
+            gRespire.complete(ModeAttemptJoin, [](AppState &state){
+              state.setJoined(false);
+            });
             break;
         case EV_REJOIN_FAILED:
             Log.Debug(F("EV_REJOIN_FAILED" CR));
@@ -164,7 +169,13 @@ void onEvent(void *ctx, uint32_t event) {
         case EV_LINK_ALIVE:
             Log.Debug(F("EV_LINK_ALIVE" CR));
             break;
-         default:
+        case EV_SCAN_FOUND:
+            Log.Debug(F("EV_SCAN_FOUND" CR));
+            break;
+        case EV_TXSTART:
+            Log.Debug(F("EV_TXSTART" CR));
+            break;
+        default:
             Log.Debug(F("Unknown Event: %d" CR), event);
             break;
     }
@@ -197,6 +208,9 @@ uint8_t voltsToPercent(float volts) {
 }
 
 static void readBatteryVolts() {
+  if (gState.getUsbPower()) {
+    return; // Don't bother reading meaningless battery level.
+  }
   float measured = uiReadSharedVbatPin(VBATPIN);
   float volts = measuredToVoltage(measured);
   // Log.Debug("Voltage at %d (bat): %f\n", (int)VBATPIN, measuredvbat);
@@ -326,6 +340,12 @@ void setup() {
     joined |= gParameters.get("DEVADDR", &devaddr)==PS_SUCCESS;
     Log.Debug(F("Setting Joined: %T!" CR), joined);
     gState.setJoined(joined);
+    if (joined) {
+      uint32_t frameUp = 0;
+      if (gParameters.get("FCNTUP", &frameUp)==PS_SUCCESS) {
+        gState.transmittedFrame(frameUp);
+      }
+    }
 
     gTimer.every(10 * 1000, [](){
       // gpsDump(Serial);
@@ -352,7 +372,7 @@ void loop() {
   lorawan.loop();
   uiLoop();
 
-  if (!ModeSend.isActive(gState)) {
+  if (!ModeSend.isActive(gState) && !ModeAttemptJoin.isActive(gState)) {
     // Do parsing and timer optional things that could throw off LoRa timing only while NOT sending.
     gpsLoop(Serial);
     gTimer.update();
@@ -394,7 +414,7 @@ void readGpsLocation(const AppState &state, const AppState &oldState, Mode *trig
 
 void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
-  Log.Debug("Attempting join...");
+  Log.Debug("Attempting join...\n");
   node.join();
 }
 
