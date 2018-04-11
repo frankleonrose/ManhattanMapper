@@ -371,8 +371,8 @@ class AppState : public RespireState<AppState> {
     }
   }
 
-  virtual void didUpdate(const AppState &oldState, const uint16_t holdLevel) {
-    dump();
+  virtual void didUpdate(const AppState &oldState, const Mode &mainMode, const uint16_t holdLevel) {
+    dump(mainMode);
   }
 };
 
