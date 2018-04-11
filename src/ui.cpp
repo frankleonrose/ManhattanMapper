@@ -261,7 +261,7 @@ Field gStatusFields[] = {
   Field("TTN Up", [](char *value, const AppState &state) {
     sprintf(value, "%d", state.ttnFrameCounter()-1);
   }),
-  Field("DEVADDR"),
+  Field("DEVADDR", 4),
   Field("NWKSKEY", 16),
   Field("APPSKEY", 16),
   // uint32_t _ttnLastSend;
