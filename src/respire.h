@@ -461,6 +461,8 @@ template <class TAppState> class RespireState : public RespireStateBase {
   }
   virtual void updateDerivedState(const TAppState &oldState) {};
   virtual void onChange(const TAppState &oldState, Executor *executor) = 0;
+  virtual void didActions(const TAppState &oldState) {};
+  virtual void didUpdate(const TAppState &oldState, const uint16_t holdLevel) {};
 };
 
 template <class TAppState> class StateTransaction {
@@ -600,7 +602,7 @@ class RespireContext {
       performActions(oldState);
     }
 
-    // _appState.dump();
+    _appState.didUpdate(oldState, _holdLevel);
   }
 
   void performActions(const TAppState &oldState) {
@@ -622,6 +624,8 @@ class RespireContext {
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);
       }
     }
+
+    _appState.didActions(oldState);
   }
 };
 

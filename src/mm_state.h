@@ -370,6 +370,10 @@ class AppState : public RespireState<AppState> {
       executor->exec(changeGpsPower, *this, oldState, NULL);
     }
   }
+
+  virtual void didUpdate(const AppState &oldState, const uint16_t holdLevel) {
+    dump();
+  }
 };
 
 #endif
