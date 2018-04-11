@@ -10,10 +10,10 @@ TODO
 */
 
 #if !defined(RS_ASSERT)
-#define RS_ASSERT(x) while (!(x)) { Log.Error("Assertion failure: " #x ); delay(1000); }
+#define RS_ASSERT(x) if (!(x)) { Log.Error("Assertion failure: " #x CR); while(true) Log.Error("."); }
 #endif
 #if !defined(RS_ASSERT_MSG)
-#define RS_ASSERT_MSG(x, msg) if (!(x)) { Log.Error("Assertion failure: " #x "[" msg "]"); }
+#define RS_ASSERT_MSG(x, msg) if (!(x)) { Log.Error("Assertion failure: " #x "[" msg "]" CR); while(true) Log.Error("."); }
 #endif
 
 #include <Arduino.h>
