@@ -11,6 +11,7 @@
 
 extern AppState gState;
 extern RespireContext<AppState> gRespire;
+extern ParameterStore gParameters;
 static bool gSDAvailable = false;
 
 static const char *kParamFile = "params.ini";
@@ -34,7 +35,7 @@ bool readParametersFromSD(ParameterStore &pstore) {
         return false;
       }
       char buffer[size];
-      int res = file.readBytes(buffer, size);
+      size_t res = file.readBytes(buffer, size);
       file.close();
       if (res!=size) {
         Log.Error(F("Could not read entirety of parameter file '%s'.\n"), kParamFile);
@@ -74,7 +75,7 @@ bool writeParametersToSD(ParameterStore &pstore) {
   if (file) {
     size_t written = file.write(buffer, size);
     file.close();
-    if (written!=size) {
+    if (written!=(size_t)size) {
       Log.Error(F("Could not write entirety of parameter file '%s'.\n"), kParamFile);
       return false;
     }
@@ -106,6 +107,8 @@ bool makePath(char *filename) {
   return true;
 }
 
+size_t formatHexBytes(char *buffer, uint8_t *bytes, size_t count);
+
 void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
   if (!gSDAvailable) {
     Log.Debug("Completing %s\n", triggeringMode->name());
@@ -123,16 +126,33 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
     return;
   }
 
+  uint8_t devAddr[4];
+  const bool ok = gParameters.get("DEVADDR", devAddr, 4)==PS_SUCCESS; // Retrieve as bytes to format standard endianness
+  char devAddrStr[9];
+  if (ok) {
+    formatHexBytes(devAddrStr, devAddr, 4);
+    devAddrStr[8] = '\0';
+  }
+  else {
+    strcpy(devAddrStr, "00000000");
+  }
   char dataString[300];
-  sprintf(dataString, "%04d%02d%02d:%02d%02d%02d.%03d,%f,%f,%f,%f,%d,%f,%d",
-        (int)gps._year, (int)gps._month, (int)gps._day, (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
-        gps._latitude, gps._longitude, gps._altitude, gps._HDOP, state.ttnFrameCounter(), state.batteryVolts(), state.getUsbPower());
+  sprintf(dataString, "%04d-%02d-%02d,'%02d:%02d:%02d.%03d',%f,%f,%f,%f,%f,%s,%ld,%s",
+        (int)gps._year, (int)gps._month, (int)gps._day,
+        (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
+        gps._latitude, gps._longitude, gps._altitude, gps._HDOP,
+        state.batteryVolts(), (state.getUsbPower() ? "'USB'" : "'BAT'"),
+        state.ttnFrameCounter(), devAddrStr);
 
   Log.Debug("Writing \"%s\" to file \"%s\"\n", dataString, filename);
 
+  const bool writeHeader = !SD.exists(filename);
   File dataFile = SD.open(filename, FILE_WRITE);
   Log.Debug("Opened %s\n", filename);
   if (dataFile) {
+    if (writeHeader) {
+      dataFile.println("Date,Time,Latitude,Longitude,Altitude,HDOP,FrameUp,Battery,USB,DevAddr");
+    }
     dataFile.println(dataString);
     Log.Debug("Wrote %s\n", filename);
     dataFile.close();
