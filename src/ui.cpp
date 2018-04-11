@@ -69,6 +69,7 @@ float uiReadSharedVbatPin(int pin) {
 
   return val;
 }
+
 void uiSetup() {
   pinMode(BUTTON_A_PIN, INPUT_PULLUP);
   pinMode(BUTTON_B_PIN, INPUT_PULLUP);
@@ -88,32 +89,19 @@ void uiSetup() {
 
   Log.Debug("uiSetup display init()\n");
   gDisplay.init();
-  // gDisplay.setBatteryVisible(true);
-  // gDisplay.setBatteryIcon(true);
-  // gDisplay.setBattery(3.5);
 
   Log.Debug("uiSetup display splash()\n");
-  // gDisplay.clearMsgArea();
-  // gDisplay.renderBattery();
-  // gDisplay.setTextSize(2);
   gDisplay.setTextSize(2);
   gDisplay.println("Manhattan");
   gDisplay.println("Mapper!");
-  // gDisplay.println("The Things Network");
-  // gDisplay.println("New York!");
   gDisplay.display();
 
-  // // below first two number equals stating pixel point,the three numbers next to logoname represent width, height and rotation
-  // gDisplay.drawBitmap(0, 0, ttn_glcd_bmp, 128, 64, 1);
+  // gDisplay.drawBitmap(0, 0, ttn_glcd_bmp, 128, 64, 1); // x, y, bitmap, width, height, rotation
   // gDisplay.display();
   Log.Debug("uiSetup finished\n");
 }
 
 void uiLoop() {
-  // static uint16_t occasion = 0;
-  // if ((occasion++ % 1000)==0) {
-  //   Log.Debug("Debounce: %x, %x, %x\n", debounceA, debounceB, debounceC);
-  // }
   gState.buttonPage(gButtonA);
   gState.buttonField(gButtonB);
   gState.buttonChange(gButtonC);

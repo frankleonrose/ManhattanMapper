@@ -327,21 +327,6 @@ void setup() {
     Log.Debug(F("Setting Joined: %T!" CR), joined);
     gState.setJoined(joined);
 
-    // LMIC init
-    // Log.Debug(F("Begin lorawan interaction!" CR));
-    // lorawan.begin();
-
-    // // Disable link check validation
-    // Log.Debug(F("LMIC_setLinkCheckMode" CR));
-    // LMIC_setLinkCheckMode(0);
-
-    // // TTN uses SF9 for its RX2 window.
-    // LMIC.dn2Dr = DR_SF9;
-
-    // // Set data rate and transmit power for uplink (note: txpow seems to be ignored by the library)
-    // Log.Debug(F("LMIC_setDrTxpow" CR));
-    // LMIC_setDrTxpow(DR_SF7, 14);
-
     gTimer.every(10 * 1000, [](){
       // gpsDump(Serial);
       gState.dump();
