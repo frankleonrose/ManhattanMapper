@@ -137,7 +137,7 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
     strcpy(devAddrStr, "00000000");
   }
   char dataString[300];
-  sprintf(dataString, "%04d-%02d-%02d,'%02d:%02d:%02d.%03d',%f,%f,%f,%f,%f,%s,%ld,%s",
+  sprintf(dataString, "%04d-%02d-%02d,\"%02d:%02d:%02d.%03d\",%f,%f,%f,%f,%f,%s,%ld,%s",
         (int)gps._year, (int)gps._month, (int)gps._day,
         (int)gps._hour, (int)gps._minute, (int)gps._seconds, (int)gps._millis,
         gps._latitude, gps._longitude, gps._altitude, gps._HDOP,
@@ -151,7 +151,7 @@ void writeLocation(const AppState &state, const AppState &oldState, Mode *trigge
   Log.Debug("Opened %s\n", filename);
   if (dataFile) {
     if (writeHeader) {
-      dataFile.println("Date,Time,Latitude,Longitude,Altitude,HDOP,FrameUp,Battery,USB,DevAddr");
+      dataFile.println("Date,Time,Latitude,Longitude,Altitude,HDOP,Battery,USB,FrameUp,DevAddr");
     }
     dataFile.println(dataString);
     Log.Debug("Wrote %s\n", filename);
