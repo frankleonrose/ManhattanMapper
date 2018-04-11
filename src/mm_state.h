@@ -31,6 +31,8 @@
 #include "respire.h"
 #include <Logging.h>
 
+#define FLOAT_SAME(a, b, precision) (fabs((a) - (b)) < precision)
+
 extern void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 extern void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
 extern void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode);
@@ -189,7 +191,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void batteryVolts(float value) {
-    if (fabs(_batteryVolts - value) < 0.01) {
+    if (FLOAT_SAME(_batteryVolts, value, 0.01)) {
       // Short circuit no change
       return;
     }
@@ -329,6 +331,7 @@ class AppState : public RespireState<AppState> {
   }
 
   void requestRedisplay() {
+    // A request is represented by a change in this value. The actual value doesn't matter.
     AppState oldState(*this);
     _redisplayRequested = !_redisplayRequested;
     onUpdate(oldState);
@@ -347,6 +350,7 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
     Log.Debug("- Display Change:  %T\n", redisplayRequested());
     Log.Debug("- USB Power [Input]:  %T\n", getUsbPower());
+    Log.Debug("- Battery Power [Input]:  %fV\n", batteryVolts());
     Log.Debug("- Joined [Input]:     %T\n", getJoined());
     Log.Debug("- GPS Power [Output]: %T\n", getGpsPower());
     Log.Debug("- GPS Fix [Input]:     %T\n", hasGpsFix());

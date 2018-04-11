@@ -210,10 +210,11 @@ Field gStatusFields[] = {
       strcpy(value, "USB");
     }
     else {
-      sprintf(value, "Bat (%0.2fV)", state.batteryVolts());
+      sprintf(value, "Bat %0.2fV", state.batteryVolts());
     }
   }, [](const AppState &state, const AppState &oldState) {
-    if (state.getUsbPower()!=oldState.getUsbPower()) {
+    if (state.getUsbPower()!=oldState.getUsbPower()
+        || !FLOAT_SAME(state.batteryVolts(), oldState.batteryVolts(), 0.05)) {
       gRequestDisplay = true;
     }
   }),
