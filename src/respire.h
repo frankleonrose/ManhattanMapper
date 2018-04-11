@@ -234,6 +234,18 @@ class Mode {
     _stateIndex = STATE_INDEX_INITIAL;
   }
 
+  uint32_t period() const {
+    switch (_perUnit) {
+      case TimeUnitDay:
+        return 24 * 60 * 60 * 1000 / _perTimes;
+      case TimeUnitHour:
+        return 60 * 60 * 1000 / _perTimes;
+      case TimeUnitNone:
+      default:
+        return 0;
+    }
+  }
+
   public:
   Mode(const Builder &builder);
 
@@ -243,6 +255,8 @@ class Mode {
       (*m)->deepReset();
     }
   }
+
+  uint32_t maxSleep(const AppState &state, uint32_t ms) const;
 
   bool attached() const { return _stateIndex != STATE_INDEX_INITIAL; }
 

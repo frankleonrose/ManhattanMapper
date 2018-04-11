@@ -354,6 +354,7 @@ class AppState : public RespireState<AppState> {
     Log.Debug("- GPS Expiry [Input]: %u\n", _gpsSampleExpiry);
     Log.Debug("- TTN Frame Up [Input]: %u\n", _ttnFrameCounter);
     Log.Debug("- TTN Last Send [Input]: %u\n", _ttnLastSend);
+    Log.Debug("- Max Sleep [Calculated]: %u (where %u is a day)\n", mainMode.maxSleep(*this, DAYS_IN_MILLIS(1)), DAYS_IN_MILLIS(1));
     _gpsSample.dump();
     mainMode.dump(*this);
     Log.Debug("AppState: ---------------- END\n");

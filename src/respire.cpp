@@ -85,23 +85,12 @@ bool Mode::triggered(const AppState &state) const {
     // Log.Debug("InvokeDelay triggers %T\n", (modeState(state)._startMillis + _invokeDelay) <= state.millis());
     return (modeState(state)._startMillis + _invokeDelay) <= state.millis();
   }
-  if (_perUnit==TimeUnitNone) {
-    // No period.
+  uint32_t p = period();
+  if (p==0) {
     return false;
   }
-  uint32_t period = 0;
-  switch (_perUnit) {
-    case TimeUnitDay:
-      period = 24 * 60 * 60 * 1000 / _perTimes;
-      break;
-    case TimeUnitHour:
-      period = 60 * 60 * 1000 / _perTimes;
-      break;
-    case TimeUnitNone:
-      return false; // No period behavior
-  }
-  // Log.Debug("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, period, currentMillis);
-  bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + period) <= state.millis();
+  // Log.Debug("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, p, currentMillis);
+  bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + p) <= state.millis();
   return triggered;
 }
 
@@ -127,6 +116,55 @@ bool Mode::persistent(const AppState &state) const {
     // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
   }
   return persist;
+}
+
+uint32_t Mode::maxSleep(const AppState &state, uint32_t ms) const {
+  if (!isActive(state)) {
+    // Not active, so none of our children are active, either.
+    return ms;
+  }
+
+  if (_maxDuration!=0) {
+    // Gonna expire at some point.
+    const uint32_t expiry = modeState(state)._startMillis + _maxDuration;
+    uint32_t expiresIn = 0;
+    if (expiry>state.millis()) {
+      expiresIn = expiry - state.millis();
+    }
+    ms = std::min(expiresIn, ms);
+  }
+
+  if (_invokeDelay) {
+    // Will be invoked sometime later.
+    const uint32_t invoke = modeState(state)._startMillis + _invokeDelay;
+    uint32_t invokedIn = 0;
+    if (invoke>state.millis()) {
+      invokedIn = invoke - state.millis();
+    }
+    ms = std::min(invokedIn, ms);
+  }
+
+  if (_perUnit!=TimeUnitNone) {
+    const uint32_t p = period();
+    const uint32_t last = modeState(state)._lastTriggerMillis;
+    if (last==0) {
+      ms = 0; // Going to be triggered immediately
+    }
+    else {
+      // Going to be triggered at last + p
+      const uint32_t trigger = last + p;
+      uint32_t triggeredIn = 0;
+      if (trigger>state.millis()) {
+        triggeredIn = trigger - state.millis();
+      }
+      ms = std::min(triggeredIn, ms);
+    }
+  }
+
+  for (auto m = _children.begin(); m!=_children.end(); ++m) {
+    ms = (*m)->maxSleep(state, ms);
+  }
+  return ms;
 }
 
 bool Mode::inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const {
