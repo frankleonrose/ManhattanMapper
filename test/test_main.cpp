@@ -313,7 +313,7 @@ void startedJoinAfter(RespireContext<AppState> &respire, const char *context, Ap
 
 void test_join_every_5_min(void) {
   TEST_ASSERT_EQUAL_MESSAGE(TimeUnitHour, ModePeriodicJoin._perUnit, "Tests expect 6 sends per *hour*");
-  TEST_ASSERT_EQUAL_MESSAGE(12, ModePeriodicJoin._perTimes, "Tests expect *6* sends per hour");
+  TEST_ASSERT_EQUAL_MESSAGE(12, ModePeriodicJoin._perTimes, "Tests expect *12* sends per hour");
 
   TestClock clock;
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
