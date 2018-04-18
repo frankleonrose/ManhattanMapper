@@ -21,10 +21,10 @@ void printFn(const char c) {
 // }
 
 class TestClock : public Clock {
-  unsigned long _millis = 100000;
+  uint32_t _millis = 100000;
 
   public:
-  virtual unsigned long millis() {
+  virtual uint32_t millis() {
     return _millis;
   }
 
@@ -110,6 +110,7 @@ void test_gps_power_while_power(void) {
   TestClock clock;
   TestExecutor expectedOps(NULL);
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
+  respire.init();
   respire.begin();
 
   {
@@ -155,6 +156,7 @@ void test_join_once_when_low_power_then_sleep_on_fail(void) {
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state;
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
+  respire.init();
   respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
@@ -187,6 +189,7 @@ void test_gps_power_and_send_after_low_power_successful_join(void) {
   TestExecutor expectedOps(attemptJoin, NULL);
   AppState state;
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
+  respire.init();
   respire.begin();
 
   TEST_ASSERT_FALSE(state.getUsbPower());
@@ -252,6 +255,7 @@ void test_5m_limit_on_low_power_gps_search(void) {
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state;
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
+  respire.init();
   respire.begin();
 
   respire.complete(ModeAttemptJoin, [](AppState &state){
@@ -319,6 +323,7 @@ void test_join_every_5_min(void) {
   TestExecutor expectedOps(attemptJoin, changeGpsPower, NULL);
   AppState state;
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
+  respire.init();
   respire.begin();
 
   // Setup our state...
@@ -401,6 +406,7 @@ void test_send_every_10_min(void) {
   AppState state;
   RespireContext<AppState> respire(state, ModeFunctional, &clock, &expectedOps);
 
+  respire.init();
   respire.begin();
 
   // Setup our state...
@@ -448,6 +454,7 @@ void test_display(void) {
   AppState state;
   RespireContext<AppState> respire(state, ModeDisplay, &clock, &expectedOps);
 
+  respire.init();
   respire.begin();
 
   state.page(0);

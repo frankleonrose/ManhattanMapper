@@ -1,6 +1,12 @@
 #include "mm_state.h"
 #include <Logging.h>
 
+#if UNIT_TEST
+#define RANDOM nativeRandom
+#else
+#define RANDOM random
+#endif
+
 Mode::Mode(const Builder &builder)
 : _name(builder._name),
   _repeatLimit(builder._repeatLimit),
@@ -20,9 +26,12 @@ Mode::Mode(const Builder &builder)
   _requiredPred(builder._requiredPred)
 {
   // Don't do anything with referred Modes (children, etc) here because they may not yet be initialized.
+  builder.lastTriggerName(_lastTriggerName, sizeof(_lastTriggerName));
+  builder.waitName(_waitName, sizeof(_waitName));
+  _accumulateWait = strlen(_waitName)==8; // Has a valid waitName
 }
 
-void Mode::attach(RespireStateBase &state) {
+void Mode::attach(RespireStateBase &state, uint32_t nowEpoch, RespireStore *store) {
   if (_stateIndex!=STATE_INDEX_INITIAL) {
     ++_countParents;
     return;
@@ -36,9 +45,30 @@ void Mode::attach(RespireStateBase &state) {
   ms._startIndex = 0;
   ms._startMillis = 0;
   ms._invocationCount = 0;
+  ms._lastTriggerMillis = 0;
+  _waitCumulative = 0;
+
+  if (store!=NULL && (_perUnit!=TimeUnitNone || _minGapDuration!=0)) {
+    // Configuration wherein we want to restore the lastTriggered time from storage
+    uint32_t lastTriggeredEpoch = 0;
+    store->load(_lastTriggerName, &lastTriggeredEpoch);
+    store->load(_waitName, &_waitCumulative);
+    if (nowEpoch==0 || lastTriggeredEpoch==0 || lastTriggeredEpoch > nowEpoch) {
+      // No absolute time known. Therefore, assign random point in the past as the last time.
+      // Push random time back by known cumulative wait time if that is available.
+      // As long as wait time is stored periodically by called checkpoint(),
+      // the periodic task will have an increased chance of running despite no fixed time reference.
+      ms._lastTriggerMillis = state.millis() - 1000 * _waitCumulative - RANDOM(period());
+    }
+    else {
+      // Compare current time to stored last triggered time.
+      ms._lastTriggerMillis = state.millis() - 1000 * (nowEpoch - lastTriggeredEpoch);
+    }
+  }
+
 
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
-    (*m)->attach(state);
+    (*m)->attach(state, nowEpoch, store);
   }
 }
 
@@ -351,6 +381,9 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
 
   if (triggered(state)) {
     modeState(state)._lastTriggerMillis = state.millis();
+    // Restart cumulative wait from this trigger event.
+    _waitCumulative = 0;
+    _waitStart = state.millis();
   }
 
   return isActive(state);
@@ -412,6 +445,12 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   }
   // Log.Debug("Leaving propagate: %s active: %T\n", name(), active);
   return active;
+}
+
+void Mode::checkpoint(AppState &state, RespireStore &store) {
+  store.beginTransaction();
+  checkpoint(state.millis(), store);
+  store.endTransaction();
 }
 
 void Executor::exec(ActionFn listener, const AppState &state, const AppState &oldState, Mode *triggeringMode) {

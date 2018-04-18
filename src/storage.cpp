@@ -61,7 +61,7 @@ bool writeParametersToSD(ParameterStore &pstore) {
     return false;
   }
 
-  SD.remove(kParamFile); // TODO: Should perform write to dummy followed by rename to actual one. Alternatively, alternate writing to different ones.
+  SD.remove(kParamFile); // TODO: In a nod towards failsafe writes, we should perform write to dummy followed by rename to actual one. Alternatively, alternate writing to different ones.
 
   char buffer[2000];
   int size = pstore.serialize(buffer, sizeof(buffer));

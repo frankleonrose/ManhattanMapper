@@ -56,6 +56,9 @@ typedef enum ActivationTag {
   ActivationIdleCell // Used to tell a child it is being activated as a idle cell
 } ActivationType;
 
+/**
+ * Clock is a time source. Useful in testing where you might want to make time pass at different speeds.
+ */
 class Clock {
   public:
   virtual unsigned long millis() {
@@ -69,6 +72,19 @@ class Clock {
 class Executor {
   public:
   virtual void exec(ActionFn action, const AppState &state, const AppState &oldState, Mode *trigger);
+};
+
+class RespireStore {
+  public:
+
+  virtual void beginTransaction();
+  virtual void endTransaction();
+
+  virtual bool load(const char *name, uint8_t *bytes, const uint16_t size) = 0;
+  virtual bool load(const char *name, uint32_t *value) = 0;
+
+  virtual bool store(const char *name, const uint8_t *bytes, const uint16_t size) = 0;
+  virtual bool store(const char *name, const uint32_t value) = 0;
 };
 
 /**
@@ -104,6 +120,7 @@ class Mode {
 
   class Builder {
     const char * const _name;
+    const char *_storageTag = NULL;
     uint8_t _repeatLimit = 0;
 
     uint32_t _minDuration = 0;
@@ -132,6 +149,10 @@ class Mode {
     : _name(name) {
     }
 
+    Builder &storageTag(const char *tag) {
+      _storageTag = tag;
+      return *this;
+    }
     Builder &repeatLimit(uint8_t repeatLimit) {
       _repeatLimit = repeatLimit;
       return *this;
@@ -196,6 +217,32 @@ class Mode {
       _requiredPred = requiredPred;
       return *this;
     }
+
+    void lastTriggerName(char *buf, size_t size) const {
+      buildTag(buf, size, "LT");
+    }
+
+    void waitName(char *buf, size_t size) const {
+      buildTag(buf, size, "CW");
+    }
+
+    private:
+
+    void buildTag(char *buf, size_t size, const char *suffix) const {
+      RS_ASSERT(buf!=NULL);
+      if (_storageTag==NULL) {
+        RS_ASSERT(size>=1);
+        *buf = '\0';
+        return;
+      }
+      // Construct an 8 character storage tag name of the form: R[1] tag[5] suffix[2]
+      RS_ASSERT(size>=9);
+      RS_ASSERT(strlen(suffix)<=2);
+      char tag[6];
+      strncpy(tag, _storageTag, sizeof(tag));
+      tag[sizeof(tag)-1] = '\0';
+      sprintf(buf, "R%s%s", tag, suffix);
+    }
   };
 
   private:
@@ -229,6 +276,12 @@ class Mode {
   uint8_t _supportiveParents = 0;
   uint32_t _supportiveFrame = 0; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
 
+  char _lastTriggerName[10]; // Name by which Last Trigger value is recovered from storage
+  bool _accumulateWait = false;
+  uint32_t _waitCumulative = 0;
+  uint32_t _waitStart = 0;
+  char _waitName[10]; // Name by which Cumulative Wait value is recovered from storage
+
   void reset() {
     _supportiveFrame = 0; // Reinitialize this count
     _stateIndex = STATE_INDEX_INITIAL;
@@ -260,7 +313,7 @@ class Mode {
 
   bool attached() const { return _stateIndex != STATE_INDEX_INITIAL; }
 
-  void attach(RespireStateBase &state);
+  void attach(RespireStateBase &state, uint32_t epochTime, RespireStore *store);
 
   void collect(std::vector<Mode*> &invokeModes, std::vector<Mode*> &timeDependentModes) {
     reset();
@@ -351,26 +404,45 @@ class Mode {
   bool inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const;
 
   void dump(const AppState &state) const {
+    const ModeState &ms = modeState(state);
     Log.Debug("Mode: \"%20s\" [%8s][%7s] parents=%d", _name,
       (isActive(state) ? "Active" : "Inactive"),
       (requiredState(state) ? "Ready" : "Unready"),
       _countParents);
     if (_repeatLimit==0) {
-      Log.Debug_(" invocations: %d,", (int)modeState(state)._invocationCount);
+      Log.Debug_(" invocations: %d,", (int)ms._invocationCount);
     }
     else {
-      Log.Debug_(" invocations: %d of [%d],", (int)modeState(state)._invocationCount, (int)_repeatLimit);
+      Log.Debug_(" invocations: %d of [%d],", (int)ms._invocationCount, (int)_repeatLimit);
     }
     if (_childSimultaneousLimit!=0) Log.Debug_(" childSimultaneous: %d,", (int)_childSimultaneousLimit);
-    if (_children.size()>0) Log.Debug_(" childInspirations: %d [limit %d],", (int)modeState(state)._childInspirationCount, (int)_childActivationLimit);
-    if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
-    if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", modeState(state)._invocationActive ? "Running" : "Not running");
+    if (_children.size()>0) Log.Debug_(" childInspirations: %d [limit %d],", (int)ms._childInspirationCount, (int)_childActivationLimit);
+    if (_perUnit != TimeUnitNone) Log.Debug_(" lastTrigger: %lu,", (long unsigned int)ms._lastTriggerMillis);
+    if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", ms._invocationActive ? "Running" : "Not running");
     if (_invokeDelay!=0) Log.Debug_(" invokeDelay: %d,", (int)_invokeDelay);
-    if (_invokeDelay!=0 && modeState(state)._invocationActive)  Log.Debug_(" lastTrigger: %lu,", (long unsigned int)modeState(state)._lastTriggerMillis);
+    if (_invokeDelay!=0 && ms._invocationActive)  Log.Debug_(" lastTrigger: %lu,", (long unsigned int)ms._lastTriggerMillis);
+    if (_perUnit != TimeUnitNone || _minGapDuration!=0) Log.Debug(" tagLT=%s", _lastTriggerName);
+    if (_accumulateWait) Log.Debug(" tagCW=%s", _waitName);
     Log.Debug_("\n");
 
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       (*m)->dump(state);
+    }
+  }
+
+  void checkpoint(AppState &state, RespireStore &store);
+
+  private:
+
+  void checkpoint(uint32_t now, RespireStore &store) {
+    if (_accumulateWait) {
+      _waitCumulative += (now - _waitStart) / 1000; // Convert ms to seconds
+      _waitStart = now;
+      store.store(_waitName, _waitCumulative);
+    }
+
+    for (auto m = _children.begin(); m!=_children.end(); ++m) {
+      (*m)->checkpoint(now, store);
     }
   }
 };
@@ -502,8 +574,8 @@ class RespireContext {
     // This dtor is most useful for tests.
     // Generally not called in app because RespireContext is global that never leaves scope.
     _appState.setContext(NULL);
-    _modeMain.deepReset();
     // Walk all nodes and restore to initial values.
+    _modeMain.deepReset();
   }
 
   void setExecutor(Executor *executor) {
@@ -514,14 +586,16 @@ class RespireContext {
     return _appState;
   }
 
-  void init() {
-    Log.Debug("RespireContext::init()" CR);
+  void init(uint32_t realTimeEpoch, RespireStore *store) {
+    Log.Debug("RespireContext::init() realTime: %u" CR, realTimeEpoch);
 
     _appState.reset();
 
     _modeMain.collect(_invokeModes, _timeDependentModes);
 
-    _modeMain.attach(_appState);
+    _clock->currentTime(realTimeEpoch);
+
+    _modeMain.attach(_appState, realTimeEpoch, store);
 
     // Main is always active
     _modeMain.activate(_appState);
@@ -534,10 +608,12 @@ class RespireContext {
     _initialized = true;
   }
 
+  void init() {
+    init(0, NULL);
+  }
+
   void begin() {
-    if (!_initialized) {
-      init();
-    }
+    RS_ASSERT(_initialized);
     TAppState reference;
     resumeActions(reference);
   }

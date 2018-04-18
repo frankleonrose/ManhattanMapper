@@ -14,6 +14,10 @@ void pinMode(uint8_t pin, uint8_t mode) {};
 void digitalWrite(uint8_t pin, uint8_t val) {};
 int digitalRead(uint8_t pin) { return 0; };
 
+long nativeRandom(long max) {
+  return max / 2;
+}
+
 size_t Print::print(const char value[]) {
   return printf("%s", value);
 }
