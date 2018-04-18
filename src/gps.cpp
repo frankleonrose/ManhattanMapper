@@ -7,6 +7,7 @@
 #include <Logging.h>
 #include <Adafruit_ZeroTimer.h>
 #include <ParameterStore.h> // For htonl htons
+#include <Timer.h>
 
 #include "gps.h"
 
@@ -14,6 +15,9 @@
 
 #define GPS_FIX_PIN 18
 #define GPS_ENABLE_PIN 19
+
+#define GPS_WAKE_UP_TIME 500 // Milliseconds. NOTE: This is not empirical. Could be optimized after observation.
+Timer gInitTimer;
 
 HardwareSerial &gpsSerial = Serial1;
 Adafruit_GPS GPS(&gpsSerial);
@@ -61,7 +65,7 @@ bool gpsHasFix() {
   return gpsHasFixStatus;
 }
 
-static void gpsFixHistoryInit() {
+static void gpsFixHistoryReset() {
   gpsHasFixStatus = false;
   gpsFixIndex = 0;
   for (uint8_t i=0; i<ELEMENTS(gpsFixHistory); ++i) {
@@ -94,7 +98,7 @@ static void gpsInit() {
   GPS.sendCommand(PMTK_Q_RELEASE);
 
   Log.Debug("gpsInit enable fix timer\n");
-  gpsFixHistoryInit();
+  gpsFixHistoryReset();
 
   gpsFixTimer.enable(true);
 }
@@ -103,18 +107,18 @@ void gpsEnable(bool enable) {
   Log.Debug("Setting GPS enable: %T\n", enable);
   digitalWrite(GPS_ENABLE_PIN, !enable);
   if (enable) {
-    delay(500); // Wait for GPS to wake up. TODO how long?
-    gpsInit();
+    gInitTimer.after(GPS_WAKE_UP_TIME, [](){
+      gpsInit();
+    });
   }
   else {
-    gpsFixHistoryInit();
+    gpsFixHistoryReset();
     gpsFixTimer.enable(false);
   }
 }
 
 void gpsSetup()
 {
-
   Log.Debug("gpsSetup begin\n");
 
   pinMode(GPS_FIX_PIN, INPUT);
@@ -131,14 +135,15 @@ void gpsSetup()
   gpsFixTimer.setCallback(true, TC_CALLBACK_CC_CHANNEL0, gpsFixISR);
   gpsFixTimer.enable(false);
 
-  gpsFixHistoryInit();
-  // gpsInit(); // Should happen only on enable
+  gpsFixHistoryReset();
 
   Log.Debug("gpsSetup done\n");
 }
 
 void gpsLoop(Print &printer)
 {
+  gInitTimer.update();
+
   char c = GPS.read();
   // if you want to debug, this is a good time to do it!
   if (GPSECHO)
