@@ -111,7 +111,7 @@ void uiLoop() {
   }
 }
 
-void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayBlank(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Called displayBlank\n");
   gDisplay.clearDisplay();
   gDisplay.display();
@@ -262,7 +262,7 @@ Field gParamFields[] = {
   Field("NETID"),
 };
 
-void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayStatus(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Called displayStatus\n");
   gDisplay.clearDisplay();
   gStatusFields[state.field() % ELEMENTS(gStatusFields)].display(state);
@@ -270,7 +270,7 @@ void displayStatus(const AppState &state, const AppState &oldState, Mode *trigge
   gRespire.complete(triggeringMode);
 }
 
-void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayParameters(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Called displayParameters\n");
   gDisplay.clearDisplay();
   gParamFields[state.field() % ELEMENTS(gParamFields)].display(state);
@@ -278,7 +278,7 @@ void displayParameters(const AppState &state, const AppState &oldState, Mode *tr
   gRespire.complete(triggeringMode);
 }
 
-void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayErrors(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Called displayErrors\n");
   gDisplay.clearDisplay();
   gDisplay.setTextSize(2);

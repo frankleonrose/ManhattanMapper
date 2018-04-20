@@ -33,41 +33,43 @@
 
 #define FLOAT_SAME(a, b, precision) (fabs((a) - (b)) < precision)
 
-extern void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+class AppState;
 
-extern void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-extern void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode);
+extern void changeGpsPower(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void readGpsLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void attemptJoin(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void changeSleep(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void sendLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void sendLocationAck(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void writeLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+
+extern void displayBlank(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void displayStatus(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void displayParameters(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
+extern void displayErrors(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
 
 // Modes
-extern Mode ModeMain;
-extern Mode ModeDisplay;
-extern Mode ModeDisplayBlank;
-extern Mode ModeDisplayBlank2;
-extern Mode ModeDisplayStatus;
-extern Mode ModeDisplayParameters;
-extern Mode ModeDisplayErrors;
-extern Mode ModeFunctional;
-extern Mode ModeSleep;
-extern Mode ModeAttemptJoin;
-extern Mode ModeLowPowerJoin;
-extern Mode ModeLowPowerGpsSearch;
-extern Mode ModeLowPowerSend;
-extern Mode ModePeriodicJoin;
-extern Mode ModePeriodicSend;
-extern Mode ModeReadAndSend;
-extern Mode ModeReadGps;
-extern Mode ModeSend;
-extern Mode ModeSendNoAck;
-extern Mode ModeSendAck;
-extern Mode ModeLogGps;
+extern Mode<AppState> ModeMain;
+extern Mode<AppState> ModeDisplay;
+extern Mode<AppState> ModeDisplayBlank;
+extern Mode<AppState> ModeDisplayBlank2;
+extern Mode<AppState> ModeDisplayStatus;
+extern Mode<AppState> ModeDisplayParameters;
+extern Mode<AppState> ModeDisplayErrors;
+extern Mode<AppState> ModeFunctional;
+extern Mode<AppState> ModeSleep;
+extern Mode<AppState> ModeAttemptJoin;
+extern Mode<AppState> ModeLowPowerJoin;
+extern Mode<AppState> ModeLowPowerGpsSearch;
+extern Mode<AppState> ModeLowPowerSend;
+extern Mode<AppState> ModePeriodicJoin;
+extern Mode<AppState> ModePeriodicSend;
+extern Mode<AppState> ModeReadAndSend;
+extern Mode<AppState> ModeReadGps;
+extern Mode<AppState> ModeSend;
+extern Mode<AppState> ModeSendNoAck;
+extern Mode<AppState> ModeSendAck;
+extern Mode<AppState> ModeLogGps;
 
 #define SAMPLE_VALID_FOR_MS 2000
 
@@ -344,7 +346,7 @@ class AppState : public RespireState<AppState> {
     onUpdate(oldState);
   }
 
-  void dump(const Mode &mainMode = ModeMain) const {
+  void dump(const Mode<AppState> &mainMode = ModeMain) const {
     Log.Debug("AppState: ----------------\n");
     Log.Debug("- Millis:             %u\n", (long unsigned)millis());
     Log.Debug("- Counter:            %u\n", (long unsigned)changeCounter());
@@ -364,14 +366,14 @@ class AppState : public RespireState<AppState> {
     Log.Debug("AppState: ---------------- END\n");
   }
 
-  virtual void onChange(const AppState &oldState, Executor *executor) {
+  virtual void onChange(const AppState &oldState, Executor<AppState> *executor) {
     // This should be simple listener or output transducer
     if (getGpsPower()!=oldState.getGpsPower()) {
       executor->exec(changeGpsPower, *this, oldState, NULL);
     }
   }
 
-  virtual void didUpdate(const AppState &oldState, const Mode &mainMode, const uint16_t holdLevel) {
+  virtual void didUpdate(const AppState &oldState, const Mode<AppState> &mainMode, const uint16_t holdLevel) {
     dump(mainMode);
   }
 };

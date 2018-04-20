@@ -2,8 +2,8 @@
 #include <Logging.h>
 
 // Shared
-Mode ModeAttemptJoin(Mode::Builder("AttemptJoin").invokeFn(attemptJoin));
-Mode ModeSend(Mode::Builder("Send")
+Mode<AppState> ModeAttemptJoin(Mode<AppState>::Builder("AttemptJoin").invokeFn(attemptJoin));
+Mode<AppState> ModeSend(Mode<AppState>::Builder("Send")
     .childActivationLimit(1)
     .childSimultaneousLimit(1)
     .addChild(&ModeSendAck)
@@ -11,16 +11,16 @@ Mode ModeSend(Mode::Builder("Send")
     .requiredPred([](const AppState &state) -> bool {
       return state.hasRecentGpsLocation();
     }));
-  Mode ModeSendNoAck(Mode::Builder("SendNoAck").invokeFn(sendLocation));
-  Mode ModeSendAck(Mode::Builder("SendAck")
+  Mode<AppState> ModeSendNoAck(Mode<AppState>::Builder("SendNoAck").invokeFn(sendLocation));
+  Mode<AppState> ModeSendAck(Mode<AppState>::Builder("SendAck")
                     .invokeFn(sendLocationAck)
                     .minGapDuration(DAYS_IN_MILLIS(1)));
 
-Mode ModeMain(Mode::Builder("Main")
+Mode<AppState> ModeMain(Mode<AppState>::Builder("Main")
               .repeatLimit(1)
               .addChild(&ModeDisplay)
               .addChild(&ModeFunctional));
-  Mode ModeDisplay(Mode::Builder("Display")
+  Mode<AppState> ModeDisplay(Mode<AppState>::Builder("Display")
       .idleMode(&ModeDisplayBlank)
       .inspirationPred([](const AppState &state, const AppState &oldState) -> bool {
         return (state.field()!=oldState.field())                            // Field changes
@@ -30,10 +30,10 @@ Mode ModeMain(Mode::Builder("Main")
       .addChild(&ModeDisplayStatus)
       .addChild(&ModeDisplayParameters)
       .addChild(&ModeDisplayErrors));
-    Mode ModeDisplayBlank(Mode::Builder("DisplayBlank")
+    Mode<AppState> ModeDisplayBlank(Mode<AppState>::Builder("DisplayBlank")
         .invokeFn(displayBlank)
         .invokeDelay(MINUTES_IN_MILLIS(1)));
-    Mode ModeDisplayStatus(Mode::Builder("DisplayStatus")
+    Mode<AppState> ModeDisplayStatus(Mode<AppState>::Builder("DisplayStatus")
         .invokeFn(displayStatus)
         .requiredPred([](const AppState &state) -> bool {
           return state.page()==0;
@@ -42,7 +42,7 @@ Mode ModeMain(Mode::Builder("Main")
           return (state.field()!=oldState.field())
               || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
-    Mode ModeDisplayParameters(Mode::Builder("DisplayParameters")
+    Mode<AppState> ModeDisplayParameters(Mode<AppState>::Builder("DisplayParameters")
         .invokeFn(displayParameters)
         .requiredPred([](const AppState &state) -> bool {
           return state.page()==1;
@@ -51,7 +51,7 @@ Mode ModeMain(Mode::Builder("Main")
           return (state.field()!=oldState.field())
               || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
-    Mode ModeDisplayErrors(Mode::Builder("DisplayErrors")
+    Mode<AppState> ModeDisplayErrors(Mode<AppState>::Builder("DisplayErrors")
         .invokeFn(displayErrors)
         .requiredPred([](const AppState &state) -> bool {
           return state.page()==2;
@@ -62,7 +62,7 @@ Mode ModeMain(Mode::Builder("Main")
               || (state.redisplayRequested()!=oldState.redisplayRequested());  // redisplayRequested changes
         }));
 
-Mode ModeFunctional(Mode::Builder("Functional")
+Mode<AppState> ModeFunctional(Mode<AppState>::Builder("Functional")
               .idleMode(&ModeSleep)
               .addChild(&ModeSleep)
               .addChild(&ModeLowPowerJoin)
@@ -70,48 +70,48 @@ Mode ModeFunctional(Mode::Builder("Functional")
               .addChild(&ModeLowPowerSend)
               .addChild(&ModePeriodicJoin)
               .addChild(&ModePeriodicSend));
-  Mode ModeSleep(Mode::Builder("Sleep").invokeFn(changeSleep));
-  Mode ModeLowPowerJoin(Mode::Builder("LowPowerJoin")
+  Mode<AppState> ModeSleep(Mode<AppState>::Builder("Sleep").invokeFn(changeSleep));
+  Mode<AppState> ModeLowPowerJoin(Mode<AppState>::Builder("LowPowerJoin")
       .repeatLimit(1)
       .addChild(&ModeAttemptJoin)
       .requiredPred([](const AppState &state) -> bool {
         return !state.getUsbPower() && !state.getJoined();
       }));
-  Mode ModeLowPowerGpsSearch(Mode::Builder("LowPowerGpsSearch")
+  Mode<AppState> ModeLowPowerGpsSearch(Mode<AppState>::Builder("LowPowerGpsSearch")
       .repeatLimit(1)
       .minDuration(MINUTES_IN_MILLIS(5))
       .maxDuration(MINUTES_IN_MILLIS(5))
       .requiredPred([](const AppState &state) -> bool {
         return !state.getUsbPower() && state.getJoined() && !state.hasGpsFix();
       }));
-  Mode ModeReadAndSend(Mode::Builder("ReadAndSend")
+  Mode<AppState> ModeReadAndSend(Mode<AppState>::Builder("ReadAndSend")
       .addChild(&ModeReadGps)
       .addChild(&ModeSend)
       .addChild(&ModeLogGps)
       .requiredPred([](const AppState &state) -> bool {
         return state.getJoined();
       }));
-  Mode ModeReadGps(Mode::Builder("ReadGps")
+  Mode<AppState> ModeReadGps(Mode<AppState>::Builder("ReadGps")
       .invokeFn(readGpsLocation)
       .requiredPred([](const AppState &state) -> bool {
         return state.hasGpsFix();
       }));
-  Mode ModeLogGps(Mode::Builder("LogGps")
+  Mode<AppState> ModeLogGps(Mode<AppState>::Builder("LogGps")
       .invokeFn(writeLocation)
       .followMode(&ModeSend));
-  Mode ModeLowPowerSend(Mode::Builder("LowPowerSend")
+  Mode<AppState> ModeLowPowerSend(Mode<AppState>::Builder("LowPowerSend")
       .repeatLimit(1)
       .addChild(&ModeReadAndSend)
       .requiredPred([](const AppState &state) -> bool {
         return !state.getUsbPower() && state.getJoined() && state.hasGpsFix();
       }));
-  Mode ModePeriodicJoin(Mode::Builder("PeriodicJoin")
+  Mode<AppState> ModePeriodicJoin(Mode<AppState>::Builder("PeriodicJoin")
       .periodic(12, TimeUnitHour)
       .addChild(&ModeAttemptJoin)
       .requiredPred([](const AppState &state) -> bool {
         return state.getUsbPower() && !state.getJoined();
       }));
-  Mode ModePeriodicSend(Mode::Builder("PeriodicSend")
+  Mode<AppState> ModePeriodicSend(Mode<AppState>::Builder("PeriodicSend")
       .periodic(6, TimeUnitHour)
       .addChild(&ModeReadAndSend)
       .requiredPred([](const AppState &state) -> bool {

@@ -109,7 +109,7 @@ bool makePath(char *filename) {
 
 size_t formatHexBytes(char *buffer, uint8_t *bytes, size_t count);
 
-void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void writeLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   if (!gSDAvailable) {
     Log.Debug("Completing %s\n", triggeringMode->name());
     gRespire.complete(triggeringMode);

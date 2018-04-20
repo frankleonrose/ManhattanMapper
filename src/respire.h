@@ -29,13 +29,7 @@ TODO
 
 #define ELEMENTS(_array) (sizeof(_array) / sizeof(_array[0]))
 
-class AppState;
-class Mode;
 class RespireStateBase;
-
-typedef void (*ActionFn)(const AppState &state, const AppState &oldState, Mode *triggeringMode);
-typedef bool (*StateModFn)(const AppState &state, const AppState &oldState);
-typedef bool (*StatePredicate)(const AppState &state);
 
 #define MINUTES_IN_MILLIS(x) ((x) * 60 * 1000)
 #define HOURS_IN_MILLIS(x) ((x) * 60 * MINUTES_IN_MILLIS(1))
@@ -60,18 +54,25 @@ typedef enum ActivationTag {
  * Clock is a time source. Useful in testing where you might want to make time pass at different speeds.
  */
 class Clock {
+  protected:
+
+  uint32_t _baseTime = 0;
+  uint32_t _baseMillis = 0;
+
   public:
-  virtual unsigned long millis() {
+
+  Clock() {
+    _baseMillis = ::millis();
+  }
+  virtual uint32_t millis() {
     return ::millis();
   }
-};
-
-/**
- * Executor gives us an opportunity to capture the execution of actions. Used for testing.
- */
-class Executor {
-  public:
-  virtual void exec(ActionFn action, const AppState &state, const AppState &oldState, Mode *trigger);
+  virtual uint32_t currentTime(const uint32_t currentTime) {
+    uint32_t last = _baseTime;
+    _baseTime = currentTime;
+    _baseMillis = millis();
+    return last;
+  }
 };
 
 class RespireStore {
@@ -90,10 +91,10 @@ class RespireStore {
 /**
  * The ModeState struct holds the mutable state of a Mode.
  *
- * The idea is that there's a lot of static information about Modes. If the AppState object held all an
+ * The idea is that there's a lot of static information about Modes. If the TAppState object held all an
  * app's Modes, copying it would be more time consuming and cumbersome.
  *
- * Instead, Modes exist outside of AppState but all ModeStates exists within it.
+ * Instead, Modes exist outside of TAppState but all ModeStates exists within it.
  * ModeStates are each 20 bytes (as of 20180323) and copying can be accomplished with the equivalent of memcpy.
  *
  * Ideally we would use some sort of shared structure immutable data structure for states which would
@@ -115,8 +116,14 @@ typedef struct ModeStateTag {
 
 #define STATE_INDEX_INITIAL 255
 
+template <class TAppState>
 class Mode {
   public:
+
+  typedef void (*ActionFn)(const TAppState &state, const TAppState &oldState, Mode<TAppState> *triggeringMode);
+  typedef bool (*StateModFn)(const TAppState &state, const TAppState &oldState);
+  typedef bool (*StatePredicate)(const TAppState &state);
+
 
   class Builder {
     const char * const _name;
@@ -131,9 +138,9 @@ class Mode {
     uint16_t _perTimes = 0;
     TimeUnit _perUnit = TimeUnitNone;
 
-    Mode *_idleMode = NULL;
-    Mode *_followMode = NULL;
-    std::vector<Mode*> _children;
+    Mode<TAppState> *_idleMode = NULL;
+    Mode<TAppState> *_followMode = NULL;
+    std::vector<Mode<TAppState>*> _children;
     uint8_t _childActivationLimit = 0;
     uint8_t _childSimultaneousLimit = 0;
 
@@ -141,7 +148,7 @@ class Mode {
     ActionFn _invokeFunction = NULL;
     StatePredicate _requiredPred = NULL;
 
-    friend Mode; // Access these private members without creating accessor functions.
+    friend Mode<TAppState>; // Access these private members without creating accessor functions.
 
     public:
 
@@ -184,15 +191,15 @@ class Mode {
       _perUnit = perUnit;
       return *this;
     }
-    Builder &idleMode(Mode *idleMode) {
+    Builder &idleMode(Mode<TAppState> *idleMode) {
       _idleMode = idleMode;
       return *this;
     }
-    Builder &followMode(Mode *followMode) {
+    Builder &followMode(Mode<TAppState> *followMode) {
       _followMode = followMode;
       return *this;
     }
-    Builder &addChild(Mode *child) {
+    Builder &addChild(Mode<TAppState> *child) {
       RS_ASSERT(child!=NULL);
       _children.push_back(child);
       return *this;
@@ -261,9 +268,9 @@ class Mode {
   const uint16_t _perTimes = 0;
   const TimeUnit _perUnit = TimeUnitNone;
 
-  Mode * const _idleMode = NULL;
-  Mode * const _followMode = NULL;
-  const std::vector<Mode*> _children;
+  Mode<TAppState> * const _idleMode = NULL;
+  Mode<TAppState> * const _followMode = NULL;
+  const std::vector<Mode<TAppState>*> _children;
   const uint8_t _childActivationLimit = 0;
   const uint8_t _childSimultaneousLimit = 0;
 
@@ -309,13 +316,13 @@ class Mode {
     }
   }
 
-  uint32_t maxSleep(const AppState &state, uint32_t ms) const;
+  uint32_t maxSleep(const TAppState &state, uint32_t ms) const;
 
   bool attached() const { return _stateIndex != STATE_INDEX_INITIAL; }
 
   void attach(RespireStateBase &state, uint32_t epochTime, RespireStore *store);
 
-  void collect(std::vector<Mode*> &invokeModes, std::vector<Mode*> &timeDependentModes) {
+  void collect(std::vector<Mode<TAppState>*> &invokeModes, std::vector<Mode<TAppState>*> &timeDependentModes) {
     reset();
 
     if (_invokeFunction!=NULL) {
@@ -334,14 +341,14 @@ class Mode {
     }
   }
 
-  bool requiredState(const AppState &state) const {
+  bool requiredState(const TAppState &state) const {
     if (!_requiredPred) {
       return true;
     }
     return _requiredPred(state);
   }
 
-  bool inspired(const AppState &state, const AppState &oldState) const {
+  bool inspired(const TAppState &state, const TAppState &oldState) const {
     return (_inspirationPred && _inspirationPred(state, oldState))
           || (requiredState(state) && !requiredState(oldState));
   }
@@ -354,56 +361,56 @@ class Mode {
     return _invokeDelay;
   }
 
-  bool persistent(const AppState &state) const;
+  bool persistent(const TAppState &state) const;
 
   const char *name() const {
     return _name;
   }
 
-  ActivationType activation(const AppState &state, const AppState &oldState) const;
+  ActivationType activation(const TAppState &state, const TAppState &oldState) const;
 
-  ModeState &modeState(AppState &state);
-  const ModeState &modeState(const AppState &state) const;
+  ModeState &modeState(TAppState &state);
+  const ModeState &modeState(const TAppState &state) const;
 
-  bool propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState);
-  bool propagateActive(const ActivationType parentActivation, const ActivationType myActivation, AppState &state, const AppState &oldState);
+  bool propagate(const ActivationType parentActivation, TAppState &state, const TAppState &oldState);
+  bool propagateActive(const ActivationType parentActivation, const ActivationType myActivation, TAppState &state, const TAppState &oldState);
 
-  void reset(AppState &state) {
+  void reset(TAppState &state) {
     // Enable mode to be used again.
     modeState(state)._invocationCount = 0;
   }
 
-  bool isActive(const AppState &state) const {
+  bool isActive(const TAppState &state) const {
     return modeState(state)._startIndex!=0;
   }
 
-  bool hitRepeatLimit(const AppState &state) const {
+  bool hitRepeatLimit(const TAppState &state) const {
     // Cannot be used again.
     return _repeatLimit!=0 && _repeatLimit<=modeState(state)._invocationCount;
   }
 
-  bool invocationTerminated(const AppState &state, const AppState &oldState) const {
+  bool invocationTerminated(const TAppState &state, const TAppState &oldState) const {
     return _invokeFunction!=NULL && !modeState(state)._invocationActive && modeState(oldState)._invocationActive;
   }
 
-  uint8_t decSupportiveParents(const AppState &state);
+  uint8_t decSupportiveParents(const TAppState &state);
 
-  bool insufficientGap(const AppState &state) const;
+  bool insufficientGap(const TAppState &state) const;
 
   /**
    * Activate if not already active and if invocationCount has not exceeded repeatLimit
    */
-  bool activate(AppState &state);
+  bool activate(TAppState &state);
 
-  bool terminate(AppState &state);
+  bool terminate(TAppState &state);
 
-  bool expired(const AppState &state) const;
+  bool expired(const TAppState &state) const;
 
-  bool triggered(const AppState &state) const;
+  bool triggered(const TAppState &state) const;
 
-  bool inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const;
+  bool inspiring(ActivationType parentActivation, const TAppState &state, const TAppState &oldState) const;
 
-  void dump(const AppState &state) const {
+  void dump(const TAppState &state) const {
     const ModeState &ms = modeState(state);
     Log.Debug("Mode: \"%20s\" [%8s][%7s] parents=%d", _name,
       (isActive(state) ? "Active" : "Inactive"),
@@ -430,7 +437,7 @@ class Mode {
     }
   }
 
-  void checkpoint(AppState &state, RespireStore &store);
+  void checkpoint(TAppState &state, RespireStore &store);
 
   private:
 
@@ -445,6 +452,15 @@ class Mode {
       (*m)->checkpoint(now, store);
     }
   }
+};
+
+/**
+ * Executor gives us an opportunity to capture the execution of actions. Used for testing.
+ */
+template <class TAppState>
+class Executor {
+  public:
+  virtual void exec(typename Mode<TAppState>::ActionFn action, const TAppState &state, const TAppState &oldState, Mode<TAppState> *trigger);
 };
 
 // template<int StateCount = 10>
@@ -462,8 +478,6 @@ class RespireStateBase {
     _millis = 0;
     _modesCount = 0;
   }
-
-  virtual void dump(const Mode &mainMode) const = 0;
 
   uint8_t allocateMode() {
     uint8_t alloc = _modesCount++;
@@ -532,9 +546,11 @@ template <class TAppState> class RespireState : public RespireStateBase {
     }
   }
   virtual void updateDerivedState(const TAppState &oldState) {};
-  virtual void onChange(const TAppState &oldState, Executor *executor) = 0;
+  virtual void onChange(const TAppState &oldState, Executor<TAppState> *executor) = 0;
   virtual void didActions(const TAppState &oldState) {};
-  virtual void didUpdate(const TAppState &oldState, const Mode &mainMode, const uint16_t holdLevel) {};
+  virtual void didUpdate(const TAppState &oldState, const Mode<TAppState> &mainMode, const uint16_t holdLevel) {};
+
+  virtual void dump(const Mode<TAppState> &mainMode) const = 0;
 };
 
 template <class TAppState> class StateTransaction {
@@ -548,19 +564,19 @@ template <class TAppState> class StateTransaction {
 template <class TAppState>
 class RespireContext {
   TAppState &_appState;
-  Mode &_modeMain;
+  Mode<TAppState> &_modeMain;
 
   Clock *_clock;
-  Executor *_executor;
+  Executor<TAppState> *_executor;
   bool _initialized = false;
   uint16_t _holdLevel = 0;
 
-  std::vector<Mode*> _invokeModes;
-  std::vector<Mode*> _timeDependentModes;
+  std::vector<Mode<TAppState>*> _invokeModes;
+  std::vector<Mode<TAppState>*> _timeDependentModes;
 
   public:
 
-  RespireContext(TAppState &appState, Mode &modeMain, Clock *clock, Executor *executor)
+  RespireContext(TAppState &appState, Mode<TAppState> &modeMain, Clock *clock, Executor<TAppState> *executor)
   : _appState(appState),
     _modeMain(modeMain),
     _clock(clock),
@@ -578,7 +594,7 @@ class RespireContext {
     _modeMain.deepReset();
   }
 
-  void setExecutor(Executor *executor) {
+  void setExecutor(Executor<TAppState> *executor) {
     _executor = executor;
   }
 
@@ -618,7 +634,7 @@ class RespireContext {
     resumeActions(reference);
   }
 
-  void complete(Mode &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
+  void complete(Mode<TAppState> &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
     // Log.Debug("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
     if (!mode.modeState(_appState)._invocationActive) {
       return;
@@ -631,7 +647,7 @@ class RespireContext {
     mode.modeState(_appState)._invocationActive = false;
     onUpdate(oldState);
   }
-  void complete(Mode *mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
+  void complete(Mode<TAppState> *mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
     complete(*mode, updateFn);
   }
 
@@ -669,7 +685,7 @@ class RespireContext {
     }
   }
 
-  void onUpdate(const AppState &oldState) {
+  void onUpdate(const TAppState &oldState) {
     _appState.newFrame(_clock->millis());
 
     _modeMain.propagate(ActivationActive, _appState, oldState);
@@ -716,5 +732,7 @@ template <class TAppState>
 StateTransaction<TAppState>::~StateTransaction() {
   _context.resumeActions(_initialState);
 }
+
+#include "respire.cpp" // Load in template definitions
 
 #endif

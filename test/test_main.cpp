@@ -35,7 +35,7 @@ class TestClock : public Clock {
 
 #define FNAME(fn) {fn, #fn}
 static struct {
-  ActionFn fn;
+  Mode<AppState>::ActionFn fn;
   const char *name;
 } _names[] = {
   FNAME(changeGpsPower),
@@ -51,30 +51,30 @@ static struct {
   FNAME(displayErrors),
 };
 
-class TestExecutor : public Executor {
-  std::vector<ActionFn> _expected;
-  std::vector<ActionFn> _called;
+class TestExecutor : public Executor<AppState> {
+  std::vector<Mode<AppState>::ActionFn> _expected;
+  std::vector<Mode<AppState>::ActionFn> _called;
   public:
-  TestExecutor(ActionFn expected, ...) {
+  TestExecutor(Mode<AppState>::ActionFn expected, ...) {
     va_list args;
     va_start(args, expected);
     while (expected!=NULL) {
       Log.Debug(F("Expect: %p %s\n"), expected, name(expected));
       _expected.push_back(expected);
-      expected = va_arg(args, ActionFn);
+      expected = va_arg(args, Mode<AppState>::ActionFn);
     }
     va_end(args);
   }
 
-  TestExecutor(ActionFn expected, va_list &args) {
+  TestExecutor(Mode<AppState>::ActionFn expected, va_list &args) {
     while (expected!=NULL) {
       Log.Debug("Expect: %p %s\n", expected, name(expected));
       _expected.push_back(expected);
-      expected = va_arg(args, ActionFn);
+      expected = va_arg(args, Mode<AppState>::ActionFn);
     }
   }
 
-  virtual void exec(ActionFn listener, const AppState &state, const AppState &oldState, Mode *trigger) {
+  virtual void exec(Mode<AppState>::ActionFn listener, const AppState &state, const AppState &oldState, Mode<AppState> *trigger) {
     Log.Debug("Exec: %p %s\n", listener, name(listener));
     _called.push_back(listener);
   }
@@ -95,7 +95,7 @@ class TestExecutor : public Executor {
     return _expected == _called;
   }
 
-  const char *name(ActionFn fn) {
+  const char *name(Mode<AppState>::ActionFn fn) {
     for (uint16_t i=0; i<ELEMENTS(_names); ++i) {
       if (fn==_names[i].fn) {
         return _names[i].name;
@@ -287,7 +287,7 @@ void test_5m_limit_on_low_power_gps_search(void) {
   }
 }
 
-void startedJoinAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, ActionFn expected, ...) {
+void startedJoinAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, Mode<AppState>::ActionFn expected, ...) {
   // Starting fresh and we attempt a send.
   va_list args;
   va_start(args, expected);
@@ -359,7 +359,7 @@ void test_join_every_5_min(void) {
   startedJoinAfter(respire, "[second pass]", state, clock, 1 * 60 /* 1 min more, for total of 5 minutes */, attemptJoin, NULL);
 }
 
-void startedSendAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, ActionFn expected, ...) {
+void startedSendAfter(RespireContext<AppState> &respire, const char *context, AppState &state, TestClock &clock, uint16_t seconds, Mode<AppState>::ActionFn expected, ...) {
   // Starting fresh and we attempt a send.
   va_list args;
   va_start(args, expected);
@@ -512,45 +512,45 @@ uint8_t fieldCountForPage(const AppState &state, uint8_t page) {
   return 0;
 }
 
-void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void changeGpsPower(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Reify GpsPower value
 }
 
-void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void readGpsLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
 }
 
-void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void attemptJoin(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
 }
 
-void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void changeSleep(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Enter or exit Sleep state
 }
 
-void writeLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void writeLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
 }
 
-void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void sendLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Send location
 }
 
-void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void sendLocationAck(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Send location
 }
 
-void displayBlank(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayBlank(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Test displayBlank\n");
 }
 
-void displayStatus(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayStatus(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Test displayStatus\n");
 }
 
-void displayParameters(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayParameters(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Test displayParameters\n");
 }
 
-void displayErrors(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void displayErrors(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Test displayErrors\n");
 }
 

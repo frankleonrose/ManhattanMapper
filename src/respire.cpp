@@ -1,5 +1,8 @@
-#include "mm_state.h"
+#ifndef RESPIRE_CPP
+#define RESPIRE_CPP
+
 #include <Logging.h>
+#include "respire.h"
 
 #if UNIT_TEST
 #define RANDOM nativeRandom
@@ -7,7 +10,8 @@
 #define RANDOM random
 #endif
 
-Mode::Mode(const Builder &builder)
+template <class TAppState>
+Mode<TAppState>::Mode(const Builder &builder)
 : _name(builder._name),
   _repeatLimit(builder._repeatLimit),
   _minDuration(builder._minDuration),
@@ -31,7 +35,8 @@ Mode::Mode(const Builder &builder)
   _accumulateWait = strlen(_waitName)==8; // Has a valid waitName
 }
 
-void Mode::attach(RespireStateBase &state, uint32_t nowEpoch, RespireStore *store) {
+template <class TAppState>
+void Mode<TAppState>::attach(RespireStateBase &state, uint32_t nowEpoch, RespireStore *store) {
   if (_stateIndex!=STATE_INDEX_INITIAL) {
     ++_countParents;
     return;
@@ -72,15 +77,18 @@ void Mode::attach(RespireStateBase &state, uint32_t nowEpoch, RespireStore *stor
   }
 }
 
-ModeState &Mode::modeState(AppState &state) {
+template <class TAppState>
+ModeState &Mode<TAppState>::modeState(TAppState &state) {
   return state.modeState(_stateIndex);
 }
 
-const ModeState &Mode::modeState(const AppState &state) const {
+template <class TAppState>
+const ModeState &Mode<TAppState>::modeState(const TAppState &state) const {
   return state.modeState(_stateIndex);
 }
 
-bool Mode::insufficientGap(const AppState &state) const {
+template <class TAppState>
+bool Mode<TAppState>::insufficientGap(const TAppState &state) const {
   if (_minGapDuration==0) {
     // We don't have this limit. Never insufficient.
     return false;
@@ -92,7 +100,8 @@ bool Mode::insufficientGap(const AppState &state) const {
   return (state.millis() - modeState(state)._endMillis) < _minGapDuration;
 }
 
-bool Mode::expired(const AppState &state) const {
+template <class TAppState>
+bool Mode<TAppState>::expired(const TAppState &state) const {
   if (!isActive(state)) {
     // Not active. Now way to expire.
     return false;
@@ -106,7 +115,8 @@ bool Mode::expired(const AppState &state) const {
   return expired;
 }
 
-bool Mode::triggered(const AppState &state) const {
+template <class TAppState>
+bool Mode<TAppState>::triggered(const TAppState &state) const {
   if (!isActive(state)) {
     // Not active. Now way to trigger.
     return false;
@@ -124,7 +134,8 @@ bool Mode::triggered(const AppState &state) const {
   return triggered;
 }
 
-bool Mode::persistent(const AppState &state) const {
+template <class TAppState>
+bool Mode<TAppState>::persistent(const TAppState &state) const {
   bool persist = false;
   if (_invokeFunction!=NULL) {
     // We started an external function and we stick around until it is done.
@@ -148,7 +159,8 @@ bool Mode::persistent(const AppState &state) const {
   return persist;
 }
 
-uint32_t Mode::maxSleep(const AppState &state, uint32_t ms) const {
+template <class TAppState>
+uint32_t Mode<TAppState>::maxSleep(const TAppState &state, uint32_t ms) const {
   if (!isActive(state)) {
     // Not active, so none of our children are active, either.
     return ms;
@@ -197,7 +209,8 @@ uint32_t Mode::maxSleep(const AppState &state, uint32_t ms) const {
   return ms;
 }
 
-bool Mode::inspiring(ActivationType parentActivation, const AppState &state, const AppState &oldState) const {
+template <class TAppState>
+bool Mode<TAppState>::inspiring(ActivationType parentActivation, const TAppState &state, const TAppState &oldState) const {
   if (!requiredState(state)) {
     return false;
   }
@@ -217,7 +230,8 @@ bool Mode::inspiring(ActivationType parentActivation, const AppState &state, con
   }
 }
 
-ActivationType Mode::activation(const AppState &state, const AppState &oldState) const {
+template <class TAppState>
+ActivationType Mode<TAppState>::activation(const TAppState &state, const TAppState &oldState) const {
   bool now = isActive(state);
   bool old = isActive(oldState);
   if (now) {
@@ -233,7 +247,8 @@ ActivationType Mode::activation(const AppState &state, const AppState &oldState)
   }
 }
 
-bool Mode::activate(AppState &state) {
+template <class TAppState>
+bool Mode<TAppState>::activate(TAppState &state) {
   Log.Debug("Activating: %s\n", name());
   if (isActive(state)) {
     // Already active. Don't change anything.
@@ -262,7 +277,8 @@ bool Mode::activate(AppState &state) {
   return true;
 }
 
-bool Mode::terminate(AppState &state) {
+template <class TAppState>
+bool Mode<TAppState>::terminate(TAppState &state) {
   Log.Debug("Terminating: %s\n", name());
   if (!isActive(state)) {
     // Already inactive. Don't change anything.
@@ -277,7 +293,8 @@ bool Mode::terminate(AppState &state) {
   return true;
 }
 
-uint8_t Mode::decSupportiveParents(const AppState &state) {
+template <class TAppState>
+uint8_t Mode<TAppState>::decSupportiveParents(const TAppState &state) {
   if (state.changeCounter()!=_supportiveFrame) {
     // RS_ASSERT(0 < _countParents);
     // Log.Debug("Resetting parents to %d\n", (int)_countParents);
@@ -289,7 +306,8 @@ uint8_t Mode::decSupportiveParents(const AppState &state) {
   return _supportiveParents;
 }
 
-bool Mode::propagateActive(const ActivationType parentActivation, const ActivationType myActivation, AppState &state, const AppState &oldState) {
+template <class TAppState>
+bool Mode<TAppState>::propagateActive(const ActivationType parentActivation, const ActivationType myActivation, TAppState &state, const TAppState &oldState) {
 
   bool barren = true;
 
@@ -389,7 +407,8 @@ bool Mode::propagateActive(const ActivationType parentActivation, const Activati
   return isActive(state);
 }
 
-bool Mode::propagate(const ActivationType parentActivation, AppState &state, const AppState &oldState) {
+template <class TAppState>
+bool Mode<TAppState>::propagate(const ActivationType parentActivation, TAppState &state, const TAppState &oldState) {
   // Terminating condition vs containing running Modes? Terminating condition wins.
   // Similarly, terminating condition wins against minimum active duration.
   // (If cell with minimum should persist beyond parent, use another mechanism, like detached sequence.)
@@ -447,12 +466,16 @@ bool Mode::propagate(const ActivationType parentActivation, AppState &state, con
   return active;
 }
 
-void Mode::checkpoint(AppState &state, RespireStore &store) {
+template <class TAppState>
+void Mode<TAppState>::checkpoint(TAppState &state, RespireStore &store) {
   store.beginTransaction();
   checkpoint(state.millis(), store);
   store.endTransaction();
 }
 
-void Executor::exec(ActionFn listener, const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+template <class TAppState>
+void Executor<TAppState>::exec(typename Mode<TAppState>::ActionFn listener, const TAppState &state, const TAppState &oldState, Mode<TAppState> *triggeringMode) {
   listener(state, oldState, triggeringMode);
 }
+
+#endif // RESPIRE_CPP

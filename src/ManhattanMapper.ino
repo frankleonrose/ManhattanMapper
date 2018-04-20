@@ -58,7 +58,7 @@
 #endif
 
 Clock gClock;
-Executor gExecutor;
+Executor<AppState> gExecutor;
 AppState gState;
 RespireContext<AppState> gRespire(gState, ModeMain, &gClock, &gExecutor);
 
@@ -395,13 +395,13 @@ void LMIC_DEBUG_PRINTF(const char *fmt, ...) {
 
 #ifndef MOCK_ACTIONS
 
-void changeGpsPower(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void changeGpsPower(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Only called when changed, so just apply value.
   Log.Debug("Setting GPS power: %d\n", state.getGpsPower());
   gpsEnable(state.getGpsPower());
 }
 
-void readGpsLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void readGpsLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   Log.Debug("Reading GPS location with gps power: %T\n", state.getGpsPower());
   gpsRead([triggeringMode](const GpsSample &gpsSample) {
     Log.Debug("Successfully read GPS\n");
@@ -414,18 +414,18 @@ void readGpsLocation(const AppState &state, const AppState &oldState, Mode *trig
   });
 }
 
-void attemptJoin(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void attemptJoin(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Enter the AttempJoin state, which is to say, call lorawan.join()
   Log.Debug("Attempting join...\n");
   node.join();
 }
 
-void changeSleep(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void changeSleep(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Enter or exit Sleep state
   Log.Debug("Entering sleep mode...\n");
 }
 
-void sendLocation(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void sendLocation(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Send location
   Log.Debug("Sending current location...\n");
   if (!do_send(state, false)) {
@@ -435,7 +435,7 @@ void sendLocation(const AppState &state, const AppState &oldState, Mode *trigger
   // Action is completed later when TX_COMPLETE event received
 }
 
-void sendLocationAck(const AppState &state, const AppState &oldState, Mode *triggeringMode) {
+void sendLocationAck(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
   // Send location
   Log.Debug("Sending current location with ACK...\n");
   if (!do_send(state, true)) {
