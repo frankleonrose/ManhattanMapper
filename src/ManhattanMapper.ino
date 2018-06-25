@@ -37,6 +37,7 @@
 
 #include <Adafruit_GPS.h>
 #include <Arduino_LoRaWAN_ttn.h>
+#include <RTClib.h>
 #include <Logging.h>
 #include <ParameterStore.h>
 #include <RamStore.h>
@@ -57,6 +58,7 @@
 #define MAX(a,b) ((a)>(b) ? (a) : (b))
 #endif
 
+RTC_PCF8523 gRTC;
 Clock gClock;
 Executor<AppState> gExecutor;
 AppState gState;
@@ -253,9 +255,52 @@ bool do_send(const AppState &state, const bool withAck) {
     }
 }
 
-void setup() {
-    //  attachInterrupt(A0, onA0Change, CHANGE);
+class RespireParameterStore : public RespireStore {
+  ParameterStore &_store;
+  bool _dirty;
 
+  public:
+
+  RespireParameterStore(ParameterStore &ps)
+  : _store(ps), _dirty(false)
+  {
+  }
+
+  virtual void beginTransaction() {
+  }
+
+  virtual void endTransaction() {
+    if (_dirty) {
+      if (writeParametersToSD(_store)) {
+        _dirty = false;
+      }
+      else {
+        Log.Error("Failed to write parameters to store after Respire updates\n");
+      }
+    }
+  }
+
+  virtual bool load(const char *name, uint8_t *bytes, const uint16_t size) {
+    return _store.get(name, bytes, size)==size;
+  }
+
+  virtual bool load(const char *name, uint32_t *value) {
+    return _store.get(name, value);
+  }
+
+
+  virtual bool store(const char *name, const uint8_t *bytes, const uint16_t size) {
+    _dirty = true;
+    return _store.set(name, bytes, size)==size;
+  }
+
+  virtual bool store(const char *name, const uint32_t value) {
+    _dirty = true;
+    return _store.set(name, value);
+  }
+};
+
+void setup() {
     pinMode(VBATPIN, INPUT);
     pinMode(VUSBPIN, INPUT);
 
@@ -274,10 +319,6 @@ void setup() {
 
     Log.Debug(F("Setup GPS" CR));
     gpsSetup();
-
-    Log.Debug(F("Setup Respire" CR));
-    gRespire.init(); // No actions are performed until begin() call below.
-    gState.setUsbPower(true);
 
     Log.Debug(F("Setup UI" CR));
     uiSetup();
@@ -301,8 +342,23 @@ void setup() {
         Log.Error(F("Failed to initialize Parameter Store!" CR));
         while (1);
     }
-    // gParameters.set("FCNTUP", SEQ_NO_20180213);
     readParametersFromSD(gParameters);
+
+    Log.Debug(F("Setup RTC" CR));
+    gRTC.begin();
+    uint32_t realTimeNow = 0; // By default, no, we don't know it.
+    if (gRTC.initialized()) {
+      DateTime now = gRTC.now();
+      // TODO: Check that now is later than compile time
+      realTimeNow = now.secondstime();
+    }
+
+    Log.Debug(F("Setup Respire" CR));
+    RespireParameterStore store(gParameters);
+
+    Log.Debug(F("Init Respire (at %d)" CR), realTimeNow);
+    gRespire.init(realTimeNow, &store); // No actions are performed until begin() call below.
+    gState.setUsbPower(true);
 
     Log.Debug(F("Setting lorawan debug mask." CR));
     lorawan.SetDebugMask(Arduino_LoRaWAN::LOG_BASIC | Arduino_LoRaWAN::LOG_ERRORS | Arduino_LoRaWAN::LOG_VERBOSE);
@@ -358,7 +414,6 @@ void setup() {
       });
     });
 
-    Log.Debug(F("Begin Respire" CR));
     gRespire.begin();
     gState.dump();
 
