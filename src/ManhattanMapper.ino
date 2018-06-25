@@ -144,9 +144,7 @@ void onEvent(void *ctx, uint32_t event) {
         case EV_JOIN_FAILED:
             Log.Debug(F("EV_JOIN_FAILED" CR));
             LMIC_reset(); // Otherwise MCCI Arduino LoRaWAN library keeps trying to join.
-            gRespire.complete(ModeAttemptJoin, [](AppState &state){
-              state.setJoined(false);
-            });
+            gRespire.complete(ModeAttemptJoin); // Don't call setJoin(false) - we may be attempting rejoin, in which case old keys still valid
             break;
         case EV_REJOIN_FAILED:
             Log.Debug(F("EV_REJOIN_FAILED" CR));
