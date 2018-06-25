@@ -242,6 +242,8 @@ bool do_send(const AppState &state, const bool withAck) {
 
     digitalWrite(LED_BUILTIN, HIGH);
 
+    LMIC_setDrTxpow(US915_DR_SF10, 14);
+
     ttn_response_t ret = node.sendBytes(packet, sizeof(packet), '\001' /* port */, withAck);
     if (ret!=TTN_SUCCESSFUL_TRANSMISSION) {
       Log.Error(F("Failed to transmit: %d" CR), ret);
@@ -383,6 +385,9 @@ void setup() {
     node.onMessage(onReceive);
 
     node.begin();
+
+    LMIC_setDrTxpow(US915_DR_SF10, 14);
+    LMIC_setLinkCheckMode(0);
 
     // Are we already joined? (Do we have session vars APPSKEY, NWKSKEY, and DEVADDR?)
     uint8_t buffer[16];
