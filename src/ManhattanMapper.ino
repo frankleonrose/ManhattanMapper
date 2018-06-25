@@ -71,10 +71,6 @@ const char *appKey = "4681950BEFE343C33BD9BB81CA68A89E";
 
 #define PACKET_FORMAT_ID 0x05
 
-// Schedule TX every this many seconds (might become longer due to duty
-// cycle limitations).
-const unsigned TX_INTERVAL_SEC = 20; // 3600 // Every hour
-
 static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 
 // Pin mapping

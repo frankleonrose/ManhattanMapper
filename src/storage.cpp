@@ -16,10 +16,11 @@ static bool gSDAvailable = false;
 
 static const char *kParamFile = "params.ini";
 
+// Here's some sample code not used in the current system. If necessary, we could configure SDFat to use SPI based on SERCOM3 on pins 11-13.
 // https://learn.adafruit.com/using-atsamd21-sercom-to-add-more-spi-i2c-serial-ports/creating-a-new-spi
 // http://asf.atmel.com/docs/3.27.0/samd21/html/asfdoc_sam0_sercom_spi_mux_settings.html
 // 13 - clock (3:1), 12 - MOSI (3:3), 11 - MISO (3:0)
-SPIClass MM_SD_SPI (&sercom3, 11 /*MISO*/, 13/*CLK*/, 12/*MOSI*/, SPI_PAD_3_SCK_1, SERCOM_RX_PAD_0);
+// SPIClass MM_SD_SPI (&sercom3, 11 /*MISO*/, 13/*CLK*/, 12/*MOSI*/, SPI_PAD_3_SCK_1, SERCOM_RX_PAD_0);
 // Hooked into SdFat by -DSDCARD_SPI=MM_SD_SPI and `extern SPIClass MM_SD_SPI;` statement in SdSpiDriver.h
 
 SdFat SD;

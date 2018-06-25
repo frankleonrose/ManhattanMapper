@@ -49,27 +49,29 @@ extern void displayParameters(const AppState &state, const AppState &oldState, M
 extern void displayErrors(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode);
 
 // Modes
-extern Mode<AppState> ModeMain;
-extern Mode<AppState> ModeDisplay;
-extern Mode<AppState> ModeDisplayBlank;
-extern Mode<AppState> ModeDisplayBlank2;
-extern Mode<AppState> ModeDisplayStatus;
-extern Mode<AppState> ModeDisplayParameters;
-extern Mode<AppState> ModeDisplayErrors;
-extern Mode<AppState> ModeFunctional;
-extern Mode<AppState> ModeSleep;
-extern Mode<AppState> ModeAttemptJoin;
-extern Mode<AppState> ModeLowPowerJoin;
-extern Mode<AppState> ModeLowPowerGpsSearch;
-extern Mode<AppState> ModeLowPowerSend;
-extern Mode<AppState> ModePeriodicJoin;
-extern Mode<AppState> ModePeriodicSend;
-extern Mode<AppState> ModeReadAndSend;
-extern Mode<AppState> ModeReadGps;
-extern Mode<AppState> ModeSend;
-extern Mode<AppState> ModeSendNoAck;
-extern Mode<AppState> ModeSendAck;
-extern Mode<AppState> ModeLogGps;
+extern Mode<AppState>
+  ModeMain,
+  ModeDisplay,
+  ModeDisplayBlank,
+  ModeDisplayBlank2,
+  ModeDisplayStatus,
+  ModeDisplayParameters,
+  ModeDisplayErrors,
+  ModeFunctional,
+  ModeSleep,
+  ModeAttemptJoin,
+  ModeLowPowerJoin,
+  ModeLowPowerGpsSearch,
+  ModeLowPowerSend,
+  ModePeriodicJoin,
+  ModePeriodicSend,
+  ModeReadAndSend,
+  ModeReadGps,
+  ModeSend,
+  ModeSendNoAck,
+  ModeSendAck,
+  ModeLogGps,
+  ModeRejoinAfterAck;
 
 #define SAMPLE_VALID_FOR_MS 2000
 
@@ -109,15 +111,15 @@ extern uint8_t fieldCountForPage(const AppState &state, uint8_t page);
 
 class AppState : public RespireState<AppState> {
   // External state
-  bool _usbPower;
-  float _batteryVolts;
-  bool _gpsFix;
+  bool _usbPower = false;
+  float _batteryVolts = 0.0;
+  bool _gpsFix = false;
 
   GpsSample _gpsSample;
-  uint32_t _gpsSampleExpiry;
+  uint32_t _gpsSampleExpiry = 0;
 
-  uint32_t _ttnFrameCounter;
-  uint32_t _ttnLastSend;
+  uint32_t _ttnFrameCounter = 0;
+  uint32_t _ttnLastSend = 0;
   bool _joined = false;
 
   // Display states
