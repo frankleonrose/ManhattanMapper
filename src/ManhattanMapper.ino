@@ -33,6 +33,9 @@
 
 #ifndef UNIT_TEST
 
+#undef max
+#undef min
+
 #include <SPI.h>
 
 #include <Adafruit_GPS.h>
@@ -51,13 +54,6 @@
 
 // #define LOGLEVEL LOG_LEVEL_DEBUG //  _NOOUTPUT, _ERRORS, _WARNINGS, _INFOS, _DEBUG, _VERBOSE
 
-#if !defined(MIN)
-#define MIN(a,b) ((a)<(b) ? (a) : (b))
-#endif
-#if !defined(MAX)
-#define MAX(a,b) ((a)>(b) ? (a) : (b))
-#endif
-
 RTC_PCF8523 gRTC;
 Clock gClock;
 Executor<AppState> gExecutor;
@@ -72,8 +68,6 @@ const char *appEui = "70B3D57EF0001C38";
 const char *appKey = "4681950BEFE343C33BD9BB81CA68A89E";
 
 #define PACKET_FORMAT_ID 0x05
-
-static constexpr uint8_t LMIC_UNUSED_PIN = 0xff;
 
 // Pin mapping
 #define VBATPIN A7
@@ -196,7 +190,7 @@ uint8_t voltsToPercent(float volts) {
   const float maxv = 3.7;
   int16_t level = 100 * (volts - minv) / (maxv - minv);
   Log.Debug_(" [Rating 0-100 between %f and %f int: %d]" CR, minv, maxv, (int)level);
-  level = MIN(MAX(level, 0), 100); // Peg to 0-100
+  level = std::min(std::max(static_cast<int>(level), 0), 100); // Peg to 0-100
 // debug: Voltage at 9: 4.33 [Rating 0-100 between 2.70 and 5.20 int: 65]
 // debug: Voltage at 15: 5.02 [Rating 0-100 between 2.70 and 5.20 int: 92]
 // VUSB through divider was 1.7 on battery and 2.5 on USB
