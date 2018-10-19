@@ -7,8 +7,13 @@ cache:
     directories:
         - "~/.platformio"
 
+env:
+    - PLATFORMIO_CI_SRC=test/test_main.cpp
+
 install:
     - pip install -U platformio
+    - platformio update
 
 script:
-    - platformio run
+    - echo "Run desktop (native) tests on Travis.CI Linux machine"
+    - platformio test --verbose --environment native_test
